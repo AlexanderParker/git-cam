@@ -18,6 +18,7 @@ from lib.utils import (
     estimate_tokens,
 )
 from lib.recheck import analyze_repository
+from lib.classes import CLIFormatter
 
 
 def create_parser():
@@ -72,6 +73,12 @@ def create_parser():
         action="store_true",
         help="Shows verbose output, including the diff being sent to Claude",
     )
+    parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        help="Stage all modified files and commit (skips verification)",
+    )
     return parser
 
 
@@ -103,6 +110,9 @@ View the readme on GitHub for more help: https://github.com/AlexanderParker/git-
 """
     )
 
+def stage_all_files():
+    """Stage all modified files."""
+    subprocess.run(['git', 'add', '-A'])
 
 def main():
     try:
@@ -116,10 +126,6 @@ def main():
 
         if args.setup:
             setup_api_key()
-            return
-
-        if args.add_instruction:
-            append_instruction(args.add_instruction)
             return
 
         if args.add_instruction:
@@ -145,15 +151,15 @@ def main():
         # Get the API key
         api_key = get_git_config_key()
         if not api_key:
-            print(
-                "API key not found. Run 'git cam --setup' first ('git cam help' for more info)"
-            )
+            print(CLIFormatter.error(
+                "API key not found. Run 'git cam setup' first ('git cam help' for more info)"
+            ))
             sys.exit(1)
 
         # Get the API model
         api_model = get_git_config_model()
         if not api_model:
-            print("API model not found. Run 'git cam setup' first")
+            print(CLIFormatter.error("API model not found. Run 'git cam setup' first"))
             sys.exit(1)
 
         # Get the API model
@@ -163,59 +169,66 @@ def main():
             analyze_repository(api_key, api_model, config_instructions)
             return
 
+        # Stage all files if -a flag is used
+        if args.all:
+            print(CLIFormatter.input_prompt("Staging all modified files..."))
+            stage_all_files()
+
         # Get the staged diff
         diff = get_filtered_diff()
         if not diff:
-            print("No changes staged for commit")
+            print(CLIFormatter.error("No changes staged for commit"))
             sys.exit(1)
 
         # Show diff in verbose mode
         if args.verbose:
-            print("\nDiff being sent to Claude:")
-            print("=" * 80)
+            print(CLIFormatter.header("Diff Preview"))
+            print(CLIFormatter.diff_header())
             print(diff)
-            print("=" * 80)
+            print(CLIFormatter.separator())
             token_count = estimate_tokens(diff)
             print(f"\nEstimated tokens: {token_count} (NOTE: Just a rough guess!)")
-            print("\nPress Enter to continue or Ctrl+C to cancel...")
+            print(CLIFormatter.input_prompt("Press Enter to continue or Ctrl+C to cancel..."))
             input()
 
         # First, perform the code review
         print("\nReviewing changes...", end="", flush=True)
         try:
             review = perform_code_review(diff, api_key, api_model, config_instructions)
-            print("\r", end="")  # Clear the "Analyzing changes..." message
+            print("\r" + " " * 50 + "\r", end="")  # Clear the "Reviewing changes..." message
 
-            if (
-                len(review.strip().split("\n")) > 1
-                or "issue" in review.lower()
-                or "concern" in review.lower()
-            ):
-                # If review has multiple lines or mentions issues/concerns, print with emphasis
-                print("\nReview result:")
-                print("-" * 40)
-                print(review)
-                print("-" * 40)
+            if not args.all:  # Skip review output in auto mode
+                has_issues = (
+                    len(review.strip().split("\n")) > 1
+                    or "issue" in review.lower()
+                    or "concern" in review.lower()
+                )
+
+                print(CLIFormatter.header("Code Review"))
+                print(CLIFormatter.review_header())
+                
+                if has_issues:
+                    print(CLIFormatter.warning(review))
+                else:
+                    print(CLIFormatter.success(review))
+                
+                print(CLIFormatter.separator())
+                print(CLIFormatter.input_prompt(
+                    "Would you like to proceed with generating a commit message?\n"
+                    "(Enter additional context, or press Enter to continue, or 'n' to cancel)"
+                ))
+                user_input = input().strip()
+
+                if user_input.lower() == "n":
+                    print(CLIFormatter.warning("Commit cancelled"))
+                    sys.exit(0)
+
+                user_context = user_input if user_input and user_input.lower() != "y" else ""
             else:
-                # For simple "all good" reviews, print inline
-                print(f"\n✓ {review}")
-
-            print(
-                "Enter optional clarifications (then ENTER). Entering 'n' or 'q' will cancel the commit: "
-            )
-            print("> ", end="", flush=True)
-            user_input = input().strip()
-
-            if user_input.lower() == "n" or user_input.lower() == "q":
-                print("Commit cancelled")
-                sys.exit(0)
-
-            user_context = (
-                user_input if user_input and user_input.lower() != "y" else ""
-            )
+                user_context = ""  # No user context in auto mode
 
         except Exception as e:
-            print(f"\nError during code review: {str(e)}")
+            print(CLIFormatter.error(f"\nError during code review: {str(e)}"))
             sys.exit(1)
 
         # Generate and handle commit message
@@ -224,25 +237,36 @@ def main():
                 message = generate_commit_message(
                     diff, review, user_context, config_instructions, api_key, api_model
                 )
-                print("\nGenerated message (" + api_model + "):\n")
-                print(message)
-                print("\n(A)ccept, (c)ancel, or (r)egenerate? ")
+                if not args.all:  # Show message preview in normal mode
+                    print(CLIFormatter.header("Generated Commit Message"))
+                    print(CLIFormatter.message_header())
+                    print(f"\n{message}\n")
+                    print(CLIFormatter.separator())
+                    print(CLIFormatter.input_prompt("(A)ccept, (c)ancel, or (r)egenerate? (ENTER accepts by default)"))
 
-                choice = input().lower()
-                if choice == "a" or choice == "":
+                    choice = input().lower()
+                    if choice == "a" or choice == "":
+                        subprocess.run(["git", "commit", "-m", message])
+                        print(CLIFormatter.success("Commit created successfully!"))
+                        break
+                    elif choice == "c":
+                        print(CLIFormatter.warning("Commit cancelled"))
+                        break
+                    elif choice == "r":
+                        print(CLIFormatter.input_prompt("Regenerating commit message..."))
+                        continue
+                else:  # Auto mode - commit immediately
                     subprocess.run(["git", "commit", "-m", message])
+                    print(CLIFormatter.success("Changes committed successfully!"))
+                    print(CLIFormatter.message_header())
+                    print(f"\n{message}\n")
                     break
-                elif choice == "c":
-                    break
-                elif choice == "r":
-                    continue
-
             except Exception as e:
-                print(f"Error: {str(e)}")
+                print(CLIFormatter.error(f"Error: {str(e)}"))
                 sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
+        print("\n" + CLIFormatter.warning("Operation cancelled by user"))
         sys.exit(0)
 
 

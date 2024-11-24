@@ -51,6 +51,7 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 ### Commands
 
 - `help`: Show help message
+- `recheck`: Check your entire repository for improvement suggestions (experimental feature).
 
 ### Options
 
@@ -61,6 +62,11 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 - `--show-instructions`: Display current instructions
 - `--set-token-limit`: Set maximum token limit for diff output (default: 1024)
 - `--show-token-limit`: Show the current token limit
+
+### Behaviour Switches
+
+- `-a`, `--all`: Stage all modified files and commit (skips verification)
+- `-v`, `--verbose`: Shows verbose output, including the diff being sent to Claude
 
 Note: The Token limit refers to the model's output; a higher number means longer replies from the model. Models like Claude's 3.5 Haiku support an input context window of 200k tokens which this project assumes is more than enough for regular use-cases.
 
