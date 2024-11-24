@@ -144,8 +144,9 @@ def has_critical_issues(review: str) -> bool:
     """
     if review.find("STOP_COMMIT") > -1:
         return True
-    
+
     return False
+
 
 def main():
     try:
@@ -163,7 +164,8 @@ def main():
                         "Could not access a git repository here (or any parent up to mount point /)"
                     )
                 )
-                print(CLIFormatter.error(
+                print(
+                    CLIFormatter.error(
                         "Check your folder and permissions (running 'git status' may yield clues)"
                     )
                 )
@@ -173,9 +175,6 @@ def main():
                     )
                 )
                 sys.exit(1)
-
-
-
 
         parser = create_parser()
         args = parser.parse_args(sys.argv[1:])
@@ -261,21 +260,34 @@ def main():
         # First, perform the code review
         print("\nReviewing changes...", end="", flush=True)
         try:
-            review = perform_code_review(diff, api_key, api_model, config_instructions)            
+            review = perform_code_review(diff, api_key, api_model, config_instructions)
 
-            if args.all: 
-                has_critical = has_critical_issues(review)                
+            if args.all:
+                has_critical = has_critical_issues(review)
+
                 if has_critical:
-                    print(CLIFormatter.error("Critical issues found that require attention:"))
+                    print(
+                        CLIFormatter.error(
+                            "\nCritical issues found that require attention:"
+                        )
+                    )
                     print("\n")
                     print(CLIFormatter.error(review.replace("STOP_COMMIT", "").strip()))
                     print("\n")
-                    print(CLIFormatter.warning("Auto-commit cancelled for safety. Please review these issues carefully."))
-                    print(CLIFormatter.warning("To bypass this check, use regular 'git cam' without -a flag to review and confirm if these changes are intended."))
+                    print(
+                        CLIFormatter.warning(
+                            "Auto-commit cancelled for safety. Please review these issues carefully."
+                        )
+                    )
+                    print(
+                        CLIFormatter.warning(
+                            "To bypass this check, use regular 'git cam' without -a flag to review and confirm if these changes are intended."
+                        )
+                    )
                     sys.exit(1)
                 else:
                     user_context = ""  # No user context in auto mode
-            else:  
+            else:
                 has_issues = (
                     len(review.strip().split("\n")) > 1
                     or "issue" in review.lower()
@@ -305,7 +317,7 @@ def main():
 
                 user_context = (
                     user_input if user_input and user_input.lower() != "y" else ""
-                )                
+                )
 
         except Exception as e:
             print(CLIFormatter.error(f"\nError during code review: {str(e)}"))
@@ -313,7 +325,6 @@ def main():
 
         # Generate and handle commit message
         while True:
-            # print ("Debug spot 1")
             try:
                 message = generate_commit_message(
                     diff, review, user_context, config_instructions, api_key, api_model
