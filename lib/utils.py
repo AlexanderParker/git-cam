@@ -1,6 +1,7 @@
 import subprocess, os
 from anthropic import Anthropic
 
+
 def get_git_config_key():
     """Get Anthropic API key from git config."""
     result = subprocess.run(
@@ -206,7 +207,7 @@ def get_filtered_diff():
             diff_parts.append(f"- {file}")
         diff_parts.append("")
 
-    new_file_parts = []    
+    new_file_parts = []
     if new_files:
         diff_parts.append("New files added (+):")
         for file in new_files:
@@ -222,7 +223,7 @@ def get_filtered_diff():
                     ).stdout
 
                     if file_content:
-                        new_file_parts.append("\nContent of new file '"+file+"':")
+                        new_file_parts.append("\nContent of new file '" + file + "':")
                         new_file_parts.append("[START OF FILE '" + file + "']")
                         new_file_parts.append(file_content.rstrip())
                         new_file_parts.append("[END OF FILE '" + file + "']")

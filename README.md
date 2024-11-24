@@ -59,12 +59,15 @@ pip install --user git+https://github.com/AlexanderParker/git-cam.git
 When using `--user`, the script is installed to your user's script directory. You'll need to ensure this directory is in your PATH:
 
 #### Windows
+
 The user scripts directory is typically:
+
 ```
 %APPDATA%\Python\PythonVVV\Scripts [VVV is your Python version number, i.e. 311]
 ```
 
 To add to PATH:
+
 1. Press Win + R
 2. Type `systempropertiesadvanced` and press Enter
 3. Click "Environment Variables"
@@ -73,7 +76,9 @@ To add to PATH:
 6. Click OK and restart your terminal
 
 #### macOS/Linux
+
 The user scripts directory is typically:
+
 ```bash
 # macOS
 ~/Library/Python/x.x/bin [x.x is your Python version number, i.e. 3.11]
@@ -83,6 +88,7 @@ The user scripts directory is typically:
 ```
 
 Add to PATH by adding this to your `~/.bashrc`, `~/.zshrc`, or equivalent:
+
 ```bash
 # macOS
 export PATH="$HOME/Library/Python/3.x/bin:$PATH"
@@ -92,6 +98,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Then reload your shell:
+
 ```bash
 source ~/.bashrc  # or ~/.zshrc
 ```
@@ -99,6 +106,7 @@ source ~/.bashrc  # or ~/.zshrc
 ### Verifying Installation
 
 After installation and PATH setup, verify the command is available:
+
 ```bash
 git cam --version
 ```
@@ -106,6 +114,7 @@ git cam --version
 ### First-time Setup
 
 Once installed, configure your API key and preferences:
+
 ```bash
 git cam --setup
 ```
@@ -118,7 +127,7 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 2. Run `git cam`
 3. Claude will review your changes and show you the results.
 4. You can type in additional context if requested, or if necessary (i.e. adding a Jira ticket number)
-5. Claude  will generate a commit message, which you can choose to accept, regenerate, or cancel.
+5. Claude will generate a commit message, which you can choose to accept, regenerate, or cancel.
 
 ### Commands
 
@@ -160,14 +169,14 @@ Also, you can add new instructions to the existing list as follows:
 ```
 $ git cam --add-instruction "Don't use emojis"
 
-Updated instructions: 
+Updated instructions:
 ----------------------------------------
 Always use British English. Don't use emojis.
 ----------------------------------------
 ```
 
-
 Finally, you can show your current instructions at any time:
+
 ```
 PS C:\tools\git-cam-dev> git cam --show-instructions
 
@@ -186,12 +195,14 @@ git cam recheck
 ```
 
 This command:
+
 - Scans all text files in your repository (up to 4KB per file)
 - Processes files in batches of 50KB
 - Analyzes code structure, organization, and best practices
 - Provides prioritized recommendations for improvements
 
 The analysis covers:
+
 - Project structure and organization
 - File naming conventions
 - Documentation completeness
@@ -226,3 +237,4 @@ MIT License - see LICENSE file for details.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+```
