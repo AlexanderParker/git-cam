@@ -48,9 +48,15 @@ def create_parser():
     # Add 'help' as a command
     subparsers.add_parser("help", help="Show help information")
 
-    # Add 'recheck' as a command
-    subparsers.add_parser("recheck", help="Analyze repository for improvements")
-
+    # Add 'recheck' as a command with question option
+    recheck_parser = subparsers.add_parser('recheck', help='Analyze repository for improvements')
+    recheck_parser.add_argument(
+        '-q',
+        '--query',
+        type=str,
+        help='Specific question or focus for the analysis'
+    )
+    
     # Add optional arguments
     parser.add_argument(
         "--setup",
@@ -94,6 +100,7 @@ def create_parser():
         action="store_true",
         help="Stage all modified files and commit (skips verification)",
     )
+
     return parser
 
 
@@ -228,7 +235,8 @@ def main():
         config_instructions = get_git_config_instructions()
 
         if args.command == "recheck":
-            analyze_repository(api_key, api_model, config_instructions)
+            query = getattr(args, 'query', None)
+            analyze_repository(api_key, api_model, config_instructions, query)
             return
 
         # Stage all files if -a flag is used

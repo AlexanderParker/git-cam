@@ -1,6 +1,5 @@
 import os
 from typing import List, Dict, Tuple
-import fnmatch
 from anthropic import Anthropic
 from lib.classes import CLIFormatter
 import subprocess
@@ -228,7 +227,7 @@ def load_batch_contents(batch: List[Dict]) -> List[Dict]:
     return batch
 
 
-def analyze_repository(api_key: str, api_model: str, config_instructions: str) -> str:
+def analyze_repository(api_key: str, api_model: str, config_instructions: str, question: str = None) -> str:
     """Analyze entire repository for improvements."""
     client = Anthropic(api_key=api_key)
 
@@ -240,8 +239,11 @@ def analyze_repository(api_key: str, api_model: str, config_instructions: str) -
     # Load gitignore patterns
     gitignore_spec = get_gitignore_spec(repo_root)
 
-    print(CLIFormatter.input_prompt("Scanning repository..."))
+    print(CLIFormatter.header("Repository Analysis..."))
+    if question:
+        print(CLIFormatter.input_prompt(f"Analysis focus: {question}\n"))
 
+    # Limit the generated response.
     token_limit = get_git_config_token_limit()
 
     # Collect files
@@ -290,6 +292,7 @@ def analyze_repository(api_key: str, api_model: str, config_instructions: str) -
 
     # Analyze each batch
     all_recommendations = []
+    accumulated_insights = ""  # Store insights from previous batches
     for batch_num, batch in enumerate(batches, 1):
         print(
             CLIFormatter.input_prompt(
@@ -304,19 +307,39 @@ def analyze_repository(api_key: str, api_model: str, config_instructions: str) -
 
         # Prepare batch summary for Claude
         batch_summary = []
+
+
+        
         for file_info in batch:
             batch_summary.append(f"\nFile: {file_info['path']}\n")
             batch_summary.append("[START OF FILE '" + file_info["path"] + "']")
             batch_summary.append(file_info["content"])
             batch_summary.append("[END OF FILE '" + file_info["path"] + "']")
         try:
-            message = client.messages.create(
-                model=api_model,
-                max_tokens=token_limit,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"""Analyze these files from a Git repository and provide recommendations for improvements. Consider:
+
+            # Build context-aware prompt
+            context_section = ""
+            if accumulated_insights:
+                context_section = f"""Consider these previous findings while analyzing the next batch of files:
+{accumulated_insights}
+Use the above findings to reinforce, or revise these insights based on the new files.
+"""
+
+            # Customize prompt based on whether there's a question
+            if question:
+                prompt = f"""Analyze these files from a Git repository specifically focusing on this question/topic: {question}
+
+{context_section}
+
+Provide relevant insights and recommendations related to this focus area.
+If certain files aren't relevant to the question, you can skip them.
+Keep recommendations clear and actionable.
+
+Files to analyze:
+
+{"".join(batch_summary)}"""
+            else:
+                prompt = f"""Analyze these files from a Git repository and provide recommendations for improvements. Consider:
 
 1. Project structure and organization
 2. File naming and code conventions
@@ -327,22 +350,56 @@ def analyze_repository(api_key: str, api_model: str, config_instructions: str) -
 7. Installation process
 8. Testing setup
 
-Global system instructions [Start]: {config_instructions} [end system instructions]
+{context_section}
 
 Only mention actionable improvements - no need to comment on things that are already well done.
 Use bullet points for recommendations.
 
 Files to analyze:
 
-{"".join(batch_summary)}""",
+{"".join(batch_summary)}"""
+
+            message = client.messages.create(
+                model=api_model,
+                max_tokens=token_limit,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
                     }
                 ],
             )
 
-            recommendations = message.content[0].text.strip()
-            if recommendations:
-                all_recommendations.append(recommendations)
+            batch_recommendations = message.content[0].text.strip()
+            if batch_recommendations:
+                all_recommendations.append(batch_recommendations)
+                # Create a summary of key insights for the next batch
+                try:
+                    summary_prompt = f"""Extract the key insights and patterns from this analysis that would be most relevant for analyzing more files:
 
+{batch_recommendations}
+
+Return a concise bullet-point summary of the most important findings that could inform further analysis."""
+
+                    summary_message = client.messages.create(
+                        model=api_model,
+                        max_tokens=1024,
+                        messages=[{
+                            "role": "user",
+                            "content": summary_prompt
+                        }]
+                    )
+                    
+                    # Update accumulated insights, keeping only the most recent context
+                    new_insights = summary_message.content[0].text.strip()
+                    # Keep context focused by limiting to most recent 2-3 batches
+                    accumulated_insights = "\n\n".join(
+                        [accumulated_insights, new_insights]
+                    ).split("\n\n")[-3:]  # Keep last 3 batch summaries
+                    accumulated_insights = "\n\n".join(accumulated_insights).strip()
+                    
+                except Exception as e:
+                    print(CLIFormatter.warning(f"Note: Could not summarize batch insights: {str(e)}"))
         except Exception as e:
             print(CLIFormatter.error(f"Error analyzing batch {batch_num}: {str(e)}"))
             continue
@@ -352,34 +409,57 @@ Files to analyze:
         if all_recommendations:
             print(CLIFormatter.input_prompt("Generating final summary..."))
 
+            context_for_summary = f"""
+Analysis was performed in {len(all_recommendations)} batches.
+Key patterns and insights discovered during analysis:
+{accumulated_insights}
+"""
+
+            if question:
+                final_prompt = f"""Review and consolidate these analysis results, specifically addressing this question/topic:
+
+{question}
+
+{context_for_summary}
+
+Provide a clear, organized summary that directly answers the question and provides relevant recommendations.
+
+Analysis results:
+
+{chr(10).join(all_recommendations)}"""
+            else:
+                final_prompt = f"""Review and consolidate these analysis results into a prioritized set of recommendations for improving the Python package repository. Group similar suggestions and focus on the most impactful improvements.
+
+{context_for_summary}
+
+Consider how patterns and issues evolved across different parts of the codebase.
+
+Analysis results:
+
+{chr(10).join(all_recommendations)}"""
+
             message = client.messages.create(
                 model=api_model,
                 max_tokens=token_limit,
                 messages=[
                     {
                         "role": "user",
-                        "content": f"""Review and consolidate these analysis results into a prioritized set of recommendations for improving the Python package repository. Group similar suggestions and focus on the most impactful improvements. Keep each recommendation brief, don't expand into subtasks.
-
-Repository File Structure:
-{file_hierarchy}
-
-Global system instructions [Start]: {config_instructions} [end system instructions]
-
-Analysis results:
-
-{chr(10).join(all_recommendations)}""",
+                        "content": final_prompt,
                     }
                 ],
             )
 
             final_summary = message.content[0].text.strip()
 
-            print(CLIFormatter.header("Repository Analysis Results"))
-            print(CLIFormatter.success("\nRepository Structure:"))
-            print(file_hierarchy)
-            print("\n" + CLIFormatter.success("Recommendations:"))
-            print(final_summary)
+            print(CLIFormatter.header(
+                "Repository Analysis Results" if not question else f"Analysis Results: {question}"
+            ))            
+            if not question:
+                print(CLIFormatter.success("\nRepository Structure:"))
+                print(file_hierarchy)
+                print("\n" + CLIFormatter.success("Recommendations:"))                
             print(CLIFormatter.separator())
+            print(final_summary)
 
             return final_summary
 
