@@ -278,6 +278,8 @@ def generate_commit_message(
                 "role": "user",
                 "content": f"""Analyze this git diff and code review to generate a commit message. Use insights from the review and any user-provided context to make the commit message more descriptive of the changes' purpose and impact.
 
+Be as concise as possible and avoid exaggerating minor changes to be more impactful than they are.
+
 Code Review:
 {review_content}
 
@@ -335,7 +337,7 @@ Return your response in this format:
 review:
 [Your concise review here - one line if no issues, detailed explanation only if problems found, optional question for user clarification if required]
 
-Here's the diff:
+Here's the diff (remember, lines starting with + have been added, lines starting with - are removed):
 
 {diff}""",
             }
