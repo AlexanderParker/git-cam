@@ -142,7 +142,7 @@ def has_critical_issues(review: str) -> bool:
     Check if the review contains a STOP_COMMIT string.
     Returns (has_critical_issues, formatted_message)
     """
-    if review.find("STOP_COMMIT"):
+    if review.find("STOP_COMMIT") > -1:
         return True
     
     return False
@@ -313,6 +313,7 @@ def main():
 
         # Generate and handle commit message
         while True:
+            # print ("Debug spot 1")
             try:
                 message = generate_commit_message(
                     diff, review, user_context, config_instructions, api_key, api_model
