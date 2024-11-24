@@ -6,7 +6,9 @@ setup(
     packages=find_packages(),
     scripts=['git-cam'],
     install_requires=[
-        'anthropic>=0.39.0'
+        'anthropic>=0.39.0',
+        'colorama>=0.4.6',
+        'pathspec>=0.11.2'
     ],
     author="Alex Parker",
     author_email="alexofparker@gmail.com",

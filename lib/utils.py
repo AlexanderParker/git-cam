@@ -1,7 +1,6 @@
 import subprocess, os
 from anthropic import Anthropic
 
-
 def get_git_config_key():
     """Get Anthropic API key from git config."""
     result = subprocess.run(

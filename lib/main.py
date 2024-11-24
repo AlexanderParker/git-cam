@@ -2,14 +2,12 @@
 import sys
 import argparse
 import subprocess
-
 from lib.utils import (
     get_git_config_key,
     setup_api_key,
     get_git_config_model,
     get_filtered_diff,
     get_git_config_instructions,
-    get_git_config_token_limit,
     perform_code_review,
     generate_commit_message,
     append_instruction,
@@ -17,8 +15,9 @@ from lib.utils import (
     show_instructions,
     set_token_limit,
     show_token_limit,
-    estimate_tokens
+    estimate_tokens,
 )
+from lib.recheck import analyze_repository
 
 
 def create_parser():
@@ -33,6 +32,9 @@ def create_parser():
     # Add 'help' as a command
     subparsers.add_parser("help", help="Show help information")
 
+    # Add 'recheck' as a command
+    subparsers.add_parser('recheck', help='Analyze repository for improvements')
+
     # Add optional arguments
     parser.add_argument(
         "--setup",
@@ -44,34 +46,31 @@ def create_parser():
         "--add-instruction",
         type=str,
         metavar="INSTRUCTION",
-        help="Append a new instruction to existing commit message guidelines"
+        help="Append a new instruction to existing commit message guidelines",
     )
     parser.add_argument(
         "--set-instructions",
         type=str,
         metavar="INSTRUCTIONS",
-        help="Set new instructions, replacing existing ones"
+        help="Set new instructions, replacing existing ones",
     )
     parser.add_argument(
-        "--show-instructions",
-        action="store_true",
-        help="Display current instructions"
+        "--show-instructions", action="store_true", help="Display current instructions"
     )
     parser.add_argument(
         "--set-token-limit",
         type=str,
         metavar="LIMIT",
-        help="Set maximum token limit for diff output (default: 1024)"
+        help="Set maximum token limit for diff output (default: 1024)",
     )
     parser.add_argument(
-        "--show-token-limit",
-        action="store_true",
-        help="Show the current token limit."
+        "--show-token-limit", action="store_true", help="Show the current token limit."
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
-        help="Shows verbose output, including the diff being sent to Claude"
+        help="Shows verbose output, including the diff being sent to Claude",
     )
     return parser
 
@@ -126,11 +125,11 @@ def main():
         if args.add_instruction:
             append_instruction(args.add_instruction)
             return
-            
+
         if args.set_instructions:
             set_instructions(args.set_instructions)
             return
-            
+
         if args.show_instructions:
             show_instructions()
             return
@@ -159,6 +158,10 @@ def main():
 
         # Get the API model
         config_instructions = get_git_config_instructions()
+
+        if args.command == "recheck":
+            analyze_repository(api_key, api_model, config_instructions)
+            return
 
         # Get the staged diff
         diff = get_filtered_diff()
