@@ -38,6 +38,78 @@ Enter additional instructions for Claude [...]:
 - If setup has already run, defaults will be shown in square brackets - just press enter to preserve the existing setting.
 - The default model initially is "claude-3-5-haiku-20241022" - I find this provides a balance of cost and quality that suits me.
 
+## Installation Options
+
+### System-wide Installation
+
+To install git-cam for all users (requires admin/root privileges):
+
+```bash
+pip install git+https://github.com/AlexanderParker/git-cam.git
+```
+
+### User Installation
+
+To install git-cam for your user only:
+
+```bash
+pip install --user git+https://github.com/AlexanderParker/git-cam.git
+```
+
+When using `--user`, the script is installed to your user's script directory. You'll need to ensure this directory is in your PATH:
+
+#### Windows
+The user scripts directory is typically:
+```
+%APPDATA%\Python\PythonVVV\Scripts [VVV is your Python version number, i.e. 311]
+```
+
+To add to PATH:
+1. Press Win + R
+2. Type `systempropertiesadvanced` and press Enter
+3. Click "Environment Variables"
+4. Under "User variables", edit "Path"
+5. Add the Scripts path above
+6. Click OK and restart your terminal
+
+#### macOS/Linux
+The user scripts directory is typically:
+```bash
+# macOS
+~/Library/Python/x.x/bin [x.x is your Python version number, i.e. 3.11]
+
+# Linux
+~/.local/bin
+```
+
+Add to PATH by adding this to your `~/.bashrc`, `~/.zshrc`, or equivalent:
+```bash
+# macOS
+export PATH="$HOME/Library/Python/3.x/bin:$PATH"
+
+# Linux
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then reload your shell:
+```bash
+source ~/.bashrc  # or ~/.zshrc
+```
+
+### Verifying Installation
+
+After installation and PATH setup, verify the command is available:
+```bash
+git cam --version
+```
+
+### First-time Setup
+
+Once installed, configure your API key and preferences:
+```bash
+git cam --setup
+```
+
 ## Usage
 
 Instead of `git commit`, use `git cam` to commit your staged changes:
@@ -104,6 +176,32 @@ Current instructions:
 Always use British English. Don't use emojis.
 ----------------------------------------
 ```
+
+## Repository Analysis
+
+The `recheck` command performs a comprehensive analysis of your repository to suggest improvements:
+
+```bash
+git cam recheck
+```
+
+This command:
+- Scans all text files in your repository (up to 4KB per file)
+- Processes files in batches of 50KB
+- Analyzes code structure, organization, and best practices
+- Provides prioritized recommendations for improvements
+
+The analysis covers:
+- Project structure and organization
+- File naming conventions
+- Documentation completeness
+- Development workflow
+- Package configuration
+- Dependencies management
+- Installation processes
+- Testing opportunities
+
+Binary files, build artifacts, and common temporary files are automatically excluded from the analysis.
 
 ## Git Global Configuration
 

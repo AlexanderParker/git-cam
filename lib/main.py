@@ -21,6 +21,21 @@ from lib.recheck import analyze_repository
 from lib.classes import CLIFormatter
 
 
+def is_git_repo() -> bool:
+    """Check if current directory is inside a git repository."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,  # Don't raise on error
+        )
+        return result.returncode == 0 and result.stdout.strip() == "true"
+    except Exception:
+        return False
+
+
 def create_parser():
     parser = argparse.ArgumentParser(
         description="AI-powered Git commit message generator using Claude",
@@ -34,7 +49,7 @@ def create_parser():
     subparsers.add_parser("help", help="Show help information")
 
     # Add 'recheck' as a command
-    subparsers.add_parser('recheck', help='Analyze repository for improvements')
+    subparsers.add_parser("recheck", help="Analyze repository for improvements")
 
     # Add optional arguments
     parser.add_argument(
@@ -85,37 +100,73 @@ def create_parser():
 def show_help():
     print(
         """
+git cam by Alex Parker - see GitHub for details: https://github.com/AlexanderParker/git-cam
+
 Usage: git cam [command] [options]
 
 Commands:
-    help                    * Show this help message
-
+    help                    | Show this help message
+    recheck                 | Check your entire repository for improvement suggestions (experimental feature)
+    
 Options:
-    --setup                 * Configure your Anthropic API key, model, and (optional) instructions
-    --version               * Show version information    
-    --set-instructions      * Set new instructions (replaces existing ones)
-    --add-instruction       * Append a new instruction to existing commit guidelines
-    --show-instructions     * Display current instructions
-    --set-token-limit       * Set maximum token limit for diff output (default: 1024)
-    --show-token-limit      * Show the current token limit
+    --setup                 | Configure your Anthropic API key, model, and (optional) instructions
+    --version               | Show version information    
+    --set-instructions      | Set new instructions (replaces existing ones)
+    --add-instruction       | Append a new instruction to existing commit guidelines
+    --show-instructions     | Display current instructions
+    --set-token-limit       | Set maximum token limit for diff output (default: 1024)
+    --show-token-limit      | Show the current token limit    
 
+Behaviour Switches
+    -a, --all               | Stage all modified files and commit (skips verification)
+    -v, --verbose           | Shows verbose output, including the diff being sent to Claude
+    
 Example workflow:
     git add .
     git cam
 
 Configuration (initial setup):
-    git cam --setup         * Configure API key, model and instructions
+    git cam --setup         | Configure API key, model and instructions
 
-View the readme on GitHub for more help: https://github.com/AlexanderParker/git-cam
 """
     )
 
+
 def stage_all_files():
     """Stage all modified files."""
-    subprocess.run(['git', 'add', '-A'])
+    subprocess.run(["git", "add", "-A"])
+
 
 def main():
     try:
+        parser = create_parser()
+        args = parser.parse_args(sys.argv[1:])
+
+        # Add git repo check right after argument parsing
+        if len(sys.argv) > 1 and sys.argv[1] in ["--help", "--version", "help"]:
+            # Skip git repo check for help and version
+            pass
+        else:
+            if not is_git_repo():
+                print(
+                    CLIFormatter.error(
+                        "Could not access a git repository here (or any parent up to mount point /)"
+                    )
+                )
+                print(CLIFormatter.error(
+                        "Check your folder and permissions (running 'git status' may yield clues)"
+                    )
+                )
+                print(
+                    CLIFormatter.error(
+                        "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)"
+                    )
+                )
+                sys.exit(1)
+
+
+
+
         parser = create_parser()
         args = parser.parse_args(sys.argv[1:])
 
@@ -151,9 +202,11 @@ def main():
         # Get the API key
         api_key = get_git_config_key()
         if not api_key:
-            print(CLIFormatter.error(
-                "API key not found. Run 'git cam setup' first ('git cam help' for more info)"
-            ))
+            print(
+                CLIFormatter.error(
+                    "API key not found. Run 'git cam setup' first ('git cam help' for more info)"
+                )
+            )
             sys.exit(1)
 
         # Get the API model
@@ -188,14 +241,20 @@ def main():
             print(CLIFormatter.separator())
             token_count = estimate_tokens(diff)
             print(f"\nEstimated tokens: {token_count} (NOTE: Just a rough guess!)")
-            print(CLIFormatter.input_prompt("Press Enter to continue or Ctrl+C to cancel..."))
+            print(
+                CLIFormatter.input_prompt(
+                    "Press Enter to continue or Ctrl+C to cancel..."
+                )
+            )
             input()
 
         # First, perform the code review
         print("\nReviewing changes...", end="", flush=True)
         try:
             review = perform_code_review(diff, api_key, api_model, config_instructions)
-            print("\r" + " " * 50 + "\r", end="")  # Clear the "Reviewing changes..." message
+            print(
+                "\r" + " " * 50 + "\r", end=""
+            )  # Clear the "Reviewing changes..." message
 
             if not args.all:  # Skip review output in auto mode
                 has_issues = (
@@ -206,24 +265,28 @@ def main():
 
                 print(CLIFormatter.header("Code Review"))
                 print(CLIFormatter.review_header())
-                
+
                 if has_issues:
                     print(CLIFormatter.warning(review))
                 else:
                     print(CLIFormatter.success(review))
-                
+
                 print(CLIFormatter.separator())
-                print(CLIFormatter.input_prompt(
-                    "Would you like to proceed with generating a commit message?\n"
-                    "(Enter additional context, or press Enter to continue, or 'n' to cancel)"
-                ))
+                print(
+                    CLIFormatter.input_prompt(
+                        "Would you like to proceed with generating a commit message?\n"
+                        "(Enter additional context, or press Enter to continue, or 'n' to cancel)"
+                    )
+                )
                 user_input = input().strip()
 
                 if user_input.lower() == "n":
                     print(CLIFormatter.warning("Commit cancelled"))
                     sys.exit(0)
 
-                user_context = user_input if user_input and user_input.lower() != "y" else ""
+                user_context = (
+                    user_input if user_input and user_input.lower() != "y" else ""
+                )
             else:
                 user_context = ""  # No user context in auto mode
 
@@ -242,7 +305,11 @@ def main():
                     print(CLIFormatter.message_header())
                     print(f"\n{message}\n")
                     print(CLIFormatter.separator())
-                    print(CLIFormatter.input_prompt("(A)ccept, (c)ancel, or (r)egenerate? (ENTER accepts by default)"))
+                    print(
+                        CLIFormatter.input_prompt(
+                            "(A)ccept, (c)ancel, or (r)egenerate? (ENTER accepts by default)"
+                        )
+                    )
 
                     choice = input().lower()
                     if choice == "a" or choice == "":
@@ -253,7 +320,9 @@ def main():
                         print(CLIFormatter.warning("Commit cancelled"))
                         break
                     elif choice == "r":
-                        print(CLIFormatter.input_prompt("Regenerating commit message..."))
+                        print(
+                            CLIFormatter.input_prompt("Regenerating commit message...")
+                        )
                         continue
                 else:  # Auto mode - commit immediately
                     subprocess.run(["git", "commit", "-m", message])
