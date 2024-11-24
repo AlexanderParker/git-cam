@@ -13,8 +13,16 @@ An AI-powered Git commit message generator that analyzes your changes and genera
 
 1. Install via pip:
 
+Option 1: Install directly from GitHub
+
 ```
-$ pip install git-cam
+$ pip install git+https://github.com/AlexanderParker/git-cam.git
+```
+
+Option 2: Git clone and install locally
+
+```
+$ pip install [path to local folder where you cloned the repo]
 ```
 
 2. Set up your Anthropic API key, preferred model, and optional instructions:
