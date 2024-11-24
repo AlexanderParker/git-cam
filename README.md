@@ -63,6 +63,7 @@ You can update your custom instructions (used for every run). For example if you
 ```
 $ git cam --set-instructions "Always use British English"
 Instructions updated successfully:
+
 ----------------------------------------
 Always use British English.
 ----------------------------------------
@@ -72,7 +73,11 @@ Also, you can add new instructions to the existing list as follows:
 
 ```
 $ git cam --add-instruction "Don't use emojis"
-Updated instructions: Always use British English. Don't use emojis.
+
+Updated instructions: 
+----------------------------------------
+Always use British English. Don't use emojis.
+----------------------------------------
 ```
 
 

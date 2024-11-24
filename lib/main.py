@@ -9,6 +9,7 @@ from lib.utils import (
     get_git_config_model,
     get_filtered_diff,
     get_git_config_instructions,
+    get_git_config_token_limit,
     perform_code_review,
     generate_commit_message,
     append_instruction,
@@ -16,6 +17,7 @@ from lib.utils import (
     show_instructions,
     set_token_limit,
     show_token_limit,
+    estimate_tokens
 )
 
 
@@ -63,9 +65,13 @@ def create_parser():
     )
     parser.add_argument(
         "--show-token-limit",
-        type=str,
-        metavar="LIMIT",
+        action="store_true",
         help="Show the current token limit."
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Shows verbose output, including the diff being sent to Claude"
     )
     return parser
 
@@ -133,6 +139,10 @@ def main():
             set_token_limit(args.set_token_limit)
             return
 
+        if args.show_token_limit:
+            show_token_limit()
+            return
+
         # Get the API key
         api_key = get_git_config_key()
         if not api_key:
@@ -156,6 +166,17 @@ def main():
             print("No changes staged for commit")
             sys.exit(1)
 
+        # Show diff in verbose mode
+        if args.verbose:
+            print("\nDiff being sent to Claude:")
+            print("=" * 80)
+            print(diff)
+            print("=" * 80)
+            token_count = estimate_tokens(diff)
+            print(f"\nEstimated tokens: {token_count} (NOTE: Just a rough guess!)")
+            print("\nPress Enter to continue or Ctrl+C to cancel...")
+            input()
+
         # First, perform the code review
         print("\nReviewing changes...", end="", flush=True)
         try:
@@ -177,7 +198,7 @@ def main():
                 print(f"\n✓ {review}")
 
             print(
-                "Type additional clarifications (then ENTER). Entering 'n' or 'q' will cancel the commit: "
+                "Enter optional clarifications (then ENTER). Entering 'n' or 'q' will cancel the commit: "
             )
             print("> ", end="", flush=True)
             user_input = input().strip()
