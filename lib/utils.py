@@ -318,6 +318,17 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
 - Unintentional debug printing to console
 - Filename / code location of the found issues
 
+If there is a critical issue, add the text "STOP_COMMIT" to your response.
+
+What counts as critical:
+- Security vulnerabilities
+- Exposed secrets or credentials
+- Dangerous configuration changes
+- Major data safety issues
+- Critical performance problems
+- Broken authentication
+- Command injection risks
+
 Global system instructions [Start]: {config_instructions} [end system instructions]
 
 Return your response in this format:
