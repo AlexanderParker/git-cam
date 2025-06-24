@@ -1,11 +1,12 @@
 # git-cam
 
-An AI-powered Git commit message generator that analyzes your changes and generates meaningful commit messages using Claude. It also performs a quick code review of your changes before committing.
+An AI-powered Git commit message generator that analyzes your changes and generates meaningful commit messages using Claude. It also performs a quick code review of your changes before committing, now with enhanced git history context.
 
 ## Features
 
 - AI-powered commit message generation
 - Automatic code review before commit
+- **NEW: Git history context** - includes recent commits for better understanding
 - Supports context from user input
 - Handles new, modified, moved, and deleted files
 
@@ -16,7 +17,7 @@ An AI-powered Git commit message generator that analyzes your changes and genera
 Option 1: Install directly from GitHub
 
 ```
-$ pip install git+https://github.com/AlexanderParker/git-cam.git
+$ pip install git+https://github.com/alexparker/git-cam
 ```
 
 Option 2: Git clone and install locally
@@ -33,10 +34,12 @@ $ git cam --setup
 Enter your Anthropic API key [...]:
 Enter preferred Claude model [...]:
 Enter additional instructions for Claude [...]:
+Enter number of recent commits to include for context (0-20) [5]:
 ```
 
 - If setup has already run, defaults will be shown in square brackets - just press enter to preserve the existing setting.
-- The default model initially is "claude-3-5-haiku-20241022" - I find this provides a balance of cost and quality that suits me.
+- The default model initially is "claude-3-5-haiku-latest" - I find this provides a balance of cost and quality that suits me.
+- **NEW**: History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
 
 ## Installation Options
 
@@ -45,7 +48,7 @@ Enter additional instructions for Claude [...]:
 To install git-cam for all users (requires admin/root privileges):
 
 ```bash
-pip install git+https://github.com/AlexanderParker/git-cam.git
+pip install git+https://github.com/alexparker/git-cam
 ```
 
 ### User Installation
@@ -53,7 +56,7 @@ pip install git+https://github.com/AlexanderParker/git-cam.git
 To install git-cam for your user only:
 
 ```bash
-pip install --user git+https://github.com/AlexanderParker/git-cam.git
+pip install --user git+https://github.com/alexparker/git-cam
 ```
 
 When using `--user`, the script is installed to your user's script directory. You'll need to ensure this directory is in your PATH:
@@ -143,6 +146,8 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 - `--show-instructions`: Display current instructions
 - `--set-token-limit`: Set maximum token limit for diff output (default: 1024)
 - `--show-token-limit`: Show the current token limit
+- `--set-history-limit`: Set number of recent commits to include for context (0-20, default: 5)
+- `--show-history-limit`: Show the current history limit
 
 ### Behaviour Switches
 
@@ -150,6 +155,34 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 - `-v`, `--verbose`: Shows verbose output, including the diff being sent to Claude
 
 Note: The Token limit refers to the model's output; a higher number means longer replies from the model. Models like Claude's 3.5 Haiku support an input context window of 200k tokens which this project assumes is more than enough for regular use-cases.
+
+## Git History Context
+
+Git-cam now includes recent commit history to provide better context for code reviews and commit messages. This helps Claude understand:
+
+- Recent development patterns
+- The evolution of files being modified
+- Context about what problems recent commits were solving
+- Better naming conventions based on your project's history
+
+### Configuring History Context
+
+```bash
+# Set how many recent commits to include (0-20)
+git cam --set-history-limit 10
+
+# Show current setting
+git cam --show-history-limit
+
+# Disable history context entirely
+git cam --set-history-limit 0
+```
+
+The history context includes:
+
+- Recent commits in the repository (up to your limit)
+- Recent commits that modified the files you're currently changing
+- This provides Claude with better understanding of your development patterns
 
 ## Custom instructions
 
@@ -198,12 +231,12 @@ This command:
 
 - Scans all text files in your repository (up to 4KB per file)
 - Processes files in batches of 50KB
-- Analyzes code structure, organization, and best practices
-- Provides prioritized recommendations for improvements
+- Analyses code structure, organisation, and best practices
+- Provides prioritised recommendations for improvements
 
 The analysis covers:
 
-- Project structure and organization
+- Project structure and organisation
 - File naming conventions
 - Documentation completeness
 - Development workflow
@@ -218,11 +251,13 @@ Binary files, build artifacts, and common temporary files are automatically excl
 
 The tool stores its settings in Git's global config, so you can use the commands provided or directly adjust the following git configuration settings:
 
-```
+```bash
 $ git config --global cam.apikey YOUR_API_KEY
 $ git config --global cam.model claude-3-5-haiku-latest
 $ git config --global cam.instructions "your custom instructions (can be blank)"
 $ git config --global cam.tokenlimit 1024
+$ git config --global cam.historylimit 5
+```
 
 ## Requirements
 
@@ -232,9 +267,8 @@ $ git config --global cam.tokenlimit 1024
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT Licence - see LICENCE file for details.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-```

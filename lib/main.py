@@ -15,6 +15,8 @@ from lib.utils import (
     show_instructions,
     set_token_limit,
     show_token_limit,
+    set_history_limit,
+    show_history_limit,
     estimate_tokens,
 )
 from lib.recheck import analyze_repository
@@ -29,7 +31,7 @@ def is_git_repo() -> bool:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8',
+            encoding="utf-8",
             check=False,  # Don't raise on error
         )
         return result.returncode == 0 and result.stdout.strip() == "true"
@@ -50,14 +52,13 @@ def create_parser():
     subparsers.add_parser("help", help="Show help information")
 
     # Add 'recheck' as a command with question option
-    recheck_parser = subparsers.add_parser('recheck', help='Analyze repository for improvements')
-    recheck_parser.add_argument(
-        '-q',
-        '--query',
-        type=str,
-        help='Specific question or focus for the analysis'
+    recheck_parser = subparsers.add_parser(
+        "recheck", help="Analyse repository for improvements"
     )
-    
+    recheck_parser.add_argument(
+        "-q", "--query", type=str, help="Specific question or focus for the analysis"
+    )
+
     # Add optional arguments
     parser.add_argument(
         "--setup",
@@ -90,6 +91,17 @@ def create_parser():
         "--show-token-limit", action="store_true", help="Show the current token limit."
     )
     parser.add_argument(
+        "--set-history-limit",
+        type=str,
+        metavar="LIMIT",
+        help="Set number of recent commits to include for context (0-20, default: 5)",
+    )
+    parser.add_argument(
+        "--show-history-limit",
+        action="store_true",
+        help="Show the current history limit.",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -108,7 +120,7 @@ def create_parser():
 def show_help():
     print(
         """
-git cam by Alex Parker - see GitHub for details: https://github.com/AlexanderParker/git-cam
+git cam by Alex Parker - see GitHub for details: https://github.com/alexparker/git-cam
 
 Usage: git cam [command] [options]
 
@@ -123,7 +135,9 @@ Options:
     --add-instruction       | Append a new instruction to existing commit guidelines
     --show-instructions     | Display current instructions
     --set-token-limit       | Set maximum token limit for diff output (default: 1024)
-    --show-token-limit      | Show the current token limit    
+    --show-token-limit      | Show the current token limit
+    --set-history-limit     | Set number of recent commits to include for context (0-20, default: 5)
+    --show-history-limit    | Show the current history limit
 
 Behaviour Switches
     -a, --all               | Stage all modified files and commit (skips verification)
@@ -134,7 +148,12 @@ Example workflow:
     git cam
 
 Configuration (initial setup):
-    git cam --setup         | Configure API key, model and instructions
+    git cam --setup         | Configure API key, model, instructions, and history settings
+
+History Context:
+    Git-cam now includes recent commit history to provide better context for reviews and commit messages.
+    You can control how many recent commits to include (0-20) using --set-history-limit.
+    Set to 0 to disable history context entirely.
 
 """
     )
@@ -216,12 +235,20 @@ def main():
             show_token_limit()
             return
 
+        if args.set_history_limit:
+            set_history_limit(args.set_history_limit)
+            return
+
+        if args.show_history_limit:
+            show_history_limit()
+            return
+
         # Get the API key
         api_key = get_git_config_key()
         if not api_key:
             print(
                 CLIFormatter.error(
-                    "API key not found. Run 'git cam setup' first ('git cam help' for more info)"
+                    "API key not found. Run 'git cam --setup' first ('git cam help' for more info)"
                 )
             )
             sys.exit(1)
@@ -229,14 +256,16 @@ def main():
         # Get the API model
         api_model = get_git_config_model()
         if not api_model:
-            print(CLIFormatter.error("API model not found. Run 'git cam setup' first"))
+            print(
+                CLIFormatter.error("API model not found. Run 'git cam --setup' first")
+            )
             sys.exit(1)
 
         # Get the API model
         config_instructions = get_git_config_instructions()
 
         if args.command == "recheck":
-            query = getattr(args, 'query', None)
+            query = getattr(args, "query", None)
             analyze_repository(api_key, api_model, config_instructions, query)
             return
 

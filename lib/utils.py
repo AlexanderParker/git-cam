@@ -52,6 +52,20 @@ def get_git_config_token_limit():
         return 1024
 
 
+def get_git_config_history_limit():
+    """Get history limit from git config, default to 5 if not set."""
+    result = subprocess.run(
+        ["git", "config", "--global", "--get", "cam.historylimit"],
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+    )
+    try:
+        return int(result.stdout.strip()) if result.stdout.strip() else 5
+    except ValueError:
+        return 5
+
+
 def estimate_tokens(text):
     """Rough estimate of token count (approximates GPT tokenization)."""
     # Rough approximation: 4 characters per token on average
@@ -83,6 +97,112 @@ def set_token_limit(limit):
     except ValueError:
         print("Token limit must be a valid number")
         return False
+
+
+def show_history_limit():
+    """Display history limit from git config."""
+    history_limit = get_git_config_history_limit()
+    print(f"\nCurrent history limit: {history_limit} commits")
+    print("-" * 40)
+
+
+def set_history_limit(limit):
+    """Set history limit in git config (number of recent commits to include)."""
+    try:
+        limit = int(limit)
+        if limit < 0:
+            print("History limit must be 0 or greater (0 disables history)")
+            return False
+        if limit > 20:
+            print("History limit should be 20 or fewer for performance reasons")
+            return False
+        subprocess.run(["git", "config", "--global", "cam.historylimit", str(limit)])
+        print(f"History limit set to: {limit}")
+        return True
+    except ValueError:
+        print("History limit must be a valid number")
+        return False
+
+
+def get_recent_git_history(limit=5):
+    """Get recent git commit history for context."""
+    if limit <= 0:
+        return ""
+    
+    try:
+        # Get recent commits with --oneline format
+        result = subprocess.run(
+            ["git", "log", "--oneline", f"-{limit}", "--no-merges"],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+        )
+        
+        if result.returncode != 0:
+            return ""
+        
+        history = result.stdout.strip()
+        if not history:
+            return ""
+        
+        # Format the history for better readability
+        formatted_history = []
+        for line in history.split('\n'):
+            if line.strip():
+                formatted_history.append(f"  {line}")
+        
+        return f"Recent commit history:\n" + "\n".join(formatted_history)
+    
+    except Exception:
+        return ""
+
+
+def get_affected_files_history(staged_files, limit=10):
+    """Get commit history for files that are being modified."""
+    if limit <= 0 or not staged_files:
+        return ""
+    
+    try:
+        history_parts = []
+        
+        for file_path in staged_files[:5]:  # Limit to first 5 files to avoid too much output
+            # Get recent commits that modified this file
+            result = subprocess.run(
+                ["git", "log", "--oneline", f"-{limit}", "--", file_path],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                file_history = result.stdout.strip().split('\n')
+                if file_history and file_history[0]:  # Only add if there's actual history
+                    history_parts.append(f"\nRecent changes to {file_path}:")
+                    for commit_line in file_history[:3]:  # Limit to 3 most recent commits per file
+                        if commit_line.strip():
+                            history_parts.append(f"  {commit_line}")
+        
+        return "\n".join(history_parts) if history_parts else ""
+    
+    except Exception:
+        return ""
+
+
+def get_staged_files():
+    """Get list of staged files."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+        )
+        
+        if result.returncode == 0:
+            return [f.strip() for f in result.stdout.split('\n') if f.strip()]
+        return []
+    except Exception:
+        return []
 
 
 def append_instruction(new_instruction):
@@ -139,6 +259,7 @@ def setup_api_key():
     existing_key = get_git_config_key()
     existing_model = get_git_config_model()
     existing_instructions = get_git_config_instructions()
+    existing_history_limit = get_git_config_history_limit()
 
     # Set default model if none exists
     default_model = existing_model if existing_model else "claude-3-5-haiku-latest"
@@ -169,6 +290,25 @@ def setup_api_key():
         instructions = existing_instructions
     if instructions:
         subprocess.run(["git", "config", "--global", "cam.instructions", instructions])
+
+    # Prompt for history limit with existing value as default
+    history_prompt = f" [{existing_history_limit}]"
+    history_limit = input(
+        f"Enter number of recent commits to include for context (0-20){history_prompt}: "
+    ).strip()
+    if not history_limit:
+        history_limit = str(existing_history_limit)
+    
+    try:
+        history_limit_int = int(history_limit)
+        if 0 <= history_limit_int <= 20:
+            subprocess.run(["git", "config", "--global", "cam.historylimit", history_limit])
+        else:
+            print("History limit must be between 0-20, using default of 5")
+            subprocess.run(["git", "config", "--global", "cam.historylimit", "5"])
+    except ValueError:
+        print("Invalid history limit, using default of 5")
+        subprocess.run(["git", "config", "--global", "cam.historylimit", "5"])
 
     print("Configuration saved")
 
@@ -244,7 +384,7 @@ def get_filtered_diff():
     if moved_files:
         diff_parts.append("Files moved:")
         for old, new in moved_files:
-            diff_parts.append(f"→ {old} -> {new}")
+            diff_parts.append(f"↻ {old} -> {new}")
         diff_parts.append("")
 
     if modified_files:
@@ -268,14 +408,44 @@ def get_filtered_diff():
         return ""
 
 
+def get_contextual_history():
+    """Get both general history and file-specific history for better context."""
+    history_limit = get_git_config_history_limit()
+    
+    if history_limit <= 0:
+        return ""
+    
+    # Get general recent history
+    recent_history = get_recent_git_history(history_limit)
+    
+    # Get staged files for file-specific history
+    staged_files = get_staged_files()
+    file_history = get_affected_files_history(staged_files, min(history_limit, 10))
+    
+    # Combine histories
+    context_parts = []
+    if recent_history:
+        context_parts.append(recent_history)
+    if file_history:
+        context_parts.append(file_history)
+    
+    return "\n".join(context_parts) if context_parts else ""
+
+
 def generate_commit_message(
     diff, review_content, user_context, config_instructions, api_key, api_model
 ):
-    """Generate commit message using Claude."""
+    """Generate commit message using Claude with git history context."""
     client = Anthropic(api_key=api_key)
 
     context_section = (
         f"\nUser provided context:\n{user_context}" if user_context else ""
+    )
+    
+    # Get git history context
+    history_context = get_contextual_history()
+    history_section = (
+        f"\nGit History Context:\n{history_context}" if history_context else ""
     )
 
     message = client.messages.create(
@@ -284,14 +454,16 @@ def generate_commit_message(
         messages=[
             {
                 "role": "user",
-                "content": f"""Analyze this git diff and code review to generate a commit message. Use insights from the review and any user-provided context to make the commit message more descriptive of the changes' purpose and impact.
+                "content": f"""Analyse this git diff and code review to generate a commit message. Use insights from the review, git history context, and any user-provided context to make the commit message more descriptive of the changes' purpose and impact.
 
-Be as concise as possible and avoid exaggerating minor changes to be more impactful than they are.
+Be as concise as possible and avoid exaggerating minor changes to be more impactful than they are. The git history helps you understand the development patterns and context of this repository.
 
 Code Review:
 {review_content}
 
 User context [Start]: {context_section} [end user context]
+
+{history_section}
 
 Global system instructions [Start]: {config_instructions} [end system instructions]
 
@@ -310,8 +482,14 @@ Here's the diff:
 
 
 def perform_code_review(diff, api_key, api_model, config_instructions):
-    """Perform an AI code review on the changes."""
+    """Perform an AI code review on the changes with git history context."""
     client = Anthropic(api_key=api_key)
+
+    # Get git history context
+    history_context = get_contextual_history()
+    history_section = (
+        f"\nGit History Context:\n{history_context}\n" if history_context else ""
+    )
 
     message = client.messages.create(
         model=api_model,
@@ -319,7 +497,8 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
         messages=[
             {
                 "role": "user",
-                "content": f"""Review this git diff for potential issues. If no significant issues are found, respond with a brief confirmation. If issues are found, provide specific details about:
+                "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. If no significant issues are found, respond with a brief confirmation. If issues are found, provide specific details about:
+
 - What problem does this change solve?
 - Critical bugs or errors
 - Security concerns
@@ -327,6 +506,7 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
 - Major maintainability problems
 - Unintentional debug printing to console
 - Filename / code location of the found issues
+- How this change fits with recent development patterns
 
 If there is a critical issue, add the text "STOP_COMMIT" to your response.
 
@@ -339,7 +519,7 @@ What counts as critical:
 - Broken authentication
 - Command injection risks
 
-Global system instructions [Start]: {config_instructions} [end system instructions]
+{history_section}Global system instructions [Start]: {config_instructions} [end system instructions]
 
 Return your response in this format:
 review:
