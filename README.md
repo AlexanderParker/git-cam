@@ -63,7 +63,7 @@ When using `--user`, the script is installed to your user's script directory. Yo
 The user scripts directory is typically:
 
 ```
-%APPDATA%\Python\PythonVVV\Scripts [VVV is your Python version number, i.e. 311]
+%APPDATA%\Roaming\Python\PythonVVV\Scripts [VVV is your Python version number, i.e. 311]
 ```
 
 To add to PATH:

@@ -177,7 +177,8 @@ def get_filtered_diff():
     """Get staged diff with filtered new/moved/deleted files."""
     # Get list of staged files and their statuses
     status = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True
+        ["git", "status", "--porcelain"], capture_output=True, text=True,
+        encoding='utf-8'
     ).stdout
 
     # Initialize lists for different file categories
@@ -224,7 +225,7 @@ def get_filtered_diff():
                     # Get the file content using git show
                     file_content = subprocess.run(
                         ["git", "show", f":{file}"], capture_output=True, text=True,
-                        encoding='utf-8',
+                        encoding='utf-8'
                     ).stdout
 
                     if file_content:
@@ -250,7 +251,8 @@ def get_filtered_diff():
         diff_parts.append("Modified files (~):")
         for file in modified_files:
             file_diff = subprocess.run(
-                ["git", "diff", "--cached", file], capture_output=True, text=True
+                ["git", "diff", "--cached", file], capture_output=True, text=True,
+                encoding='utf-8'
             ).stdout
             if file_diff:
                 diff_parts.append(f"~ {file}")
