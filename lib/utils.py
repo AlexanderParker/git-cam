@@ -8,6 +8,7 @@ def get_git_config_key():
         ["git", "config", "--global", "--get", "cam.apikey"],
         capture_output=True,
         text=True,
+        encoding='utf-8',
     )
     return result.stdout.strip()
 
@@ -18,6 +19,7 @@ def get_git_config_model():
         ["git", "config", "--global", "--get", "cam.model"],
         capture_output=True,
         text=True,
+        encoding='utf-8',
     )
     return result.stdout.strip()
 
@@ -28,6 +30,7 @@ def get_git_config_instructions():
         ["git", "config", "--global", "--get", "cam.instructions"],
         capture_output=True,
         text=True,
+        encoding='utf-8',
     )
     return result.stdout.strip()
 
@@ -38,6 +41,7 @@ def get_git_config_token_limit():
         ["git", "config", "--global", "--get", "cam.tokenlimit"],
         capture_output=True,
         text=True,
+        encoding='utf-8',
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 1024
@@ -219,7 +223,8 @@ def get_filtered_diff():
                 if file_size < 8192:  # 8KB = 8192 bytes
                     # Get the file content using git show
                     file_content = subprocess.run(
-                        ["git", "show", f":{file}"], capture_output=True, text=True
+                        ["git", "show", f":{file}"], capture_output=True, text=True,
+                        encoding='utf-8',
                     ).stdout
 
                     if file_content:

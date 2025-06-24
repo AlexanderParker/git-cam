@@ -29,6 +29,7 @@ def is_git_repo() -> bool:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding='utf-8',
             check=False,  # Don't raise on error
         )
         return result.returncode == 0 and result.stdout.strip() == "true"

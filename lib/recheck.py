@@ -233,7 +233,8 @@ def analyze_repository(api_key: str, api_model: str, config_instructions: str, q
 
     # Get repository root
     repo_root = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+        encoding='utf-8'
     ).stdout.strip()
 
     # Load gitignore patterns
