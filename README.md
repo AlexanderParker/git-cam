@@ -41,6 +41,12 @@ Enter number of recent commits to include for context (0-20) [5]:
 - The default model initially is "claude-3-5-haiku-latest" - I find this provides a balance of cost and quality that suits me.
 - **NEW**: History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
 
+## Updating
+
+If installed with the --user switch:
+
+```pip install --user --force-reinstall git+https://github.com/AlexanderParker/git-cam.git```
+
 ## Installation Options
 
 ### System-wide Installation
