@@ -17,7 +17,7 @@ An AI-powered Git commit message generator that analyzes your changes and genera
 Option 1: Install directly from GitHub
 
 ```
-$ pip install git+https://github.com/alexparker/git-cam
+$ pip install git+https://github.com/AlexanderParker/git-cam
 ```
 
 Option 2: Git clone and install locally
@@ -54,7 +54,7 @@ If installed with the --user switch:
 To install git-cam for all users (requires admin/root privileges):
 
 ```bash
-pip install git+https://github.com/alexparker/git-cam
+pip install git+https://github.com/AlexanderParker/git-cam
 ```
 
 ### User Installation
@@ -62,7 +62,7 @@ pip install git+https://github.com/alexparker/git-cam
 To install git-cam for your user only:
 
 ```bash
-pip install --user git+https://github.com/alexparker/git-cam
+pip install --user git+https://github.com/AlexanderParker/git-cam
 ```
 
 When using `--user`, the script is installed to your user's script directory. You'll need to ensure this directory is in your PATH:

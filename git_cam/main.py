@@ -18,6 +18,9 @@ from git_cam.utils import (
     set_history_limit,
     show_history_limit,
     estimate_tokens,
+    check_precommit_installed,
+    run_precommit_hooks,
+    should_run_precommit,   
 )
 from git_cam.recheck import analyze_repository
 from git_cam.classes import CLIFormatter
