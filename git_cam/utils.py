@@ -2,13 +2,71 @@ import subprocess, os
 from anthropic import Anthropic
 
 
+def check_precommit_installed():
+    """Check if pre-commit is installed and configured."""
+    try:
+        # Check if pre-commit command exists
+        result = subprocess.run(
+            ["pre-commit", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if result.returncode != 0:
+            return False
+
+        # Check if .pre-commit-config.yaml exists
+        return os.path.exists(".pre-commit-config.yaml")
+    except FileNotFoundError:
+        return False
+
+
+def run_precommit_hooks():
+    """Run pre-commit hooks on staged files."""
+    try:
+        print("Running pre-commit hooks...")
+        result = subprocess.run(
+            ["pre-commit", "run", "--files"] + get_staged_files(),
+            text=True,
+            encoding="utf-8",
+        )
+
+        if result.returncode == 0:
+            print("✓ Pre-commit hooks passed")
+            return True
+        else:
+            print("✗ Pre-commit hooks failed")
+            print(
+                "Please fix the issues and re-stage your files before running git cam again."
+            )
+            return False
+
+    except Exception as e:
+        print(f"Error running pre-commit hooks: {str(e)}")
+        return False
+
+
+def should_run_precommit():
+    """Ask user if they want to run pre-commit hooks."""
+    if not check_precommit_installed():
+        return False
+
+    try:
+        response = (
+            input("Pre-commit hooks detected. Run them first? (Y/n): ").strip().lower()
+        )
+        return response in ["", "y", "yes"]
+    except KeyboardInterrupt:
+        return False
+
+
 def get_git_config_key():
     """Get Anthropic API key from git config."""
     result = subprocess.run(
         ["git", "config", "--global", "--get", "cam.apikey"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     return result.stdout.strip()
 
@@ -19,7 +77,7 @@ def get_git_config_model():
         ["git", "config", "--global", "--get", "cam.model"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     return result.stdout.strip()
 
@@ -30,7 +88,7 @@ def get_git_config_instructions():
         ["git", "config", "--global", "--get", "cam.instructions"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     return result.stdout.strip()
 
@@ -41,7 +99,7 @@ def get_git_config_token_limit():
         ["git", "config", "--global", "--get", "cam.tokenlimit"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 1024
@@ -58,7 +116,7 @@ def get_git_config_history_limit():
         ["git", "config", "--global", "--get", "cam.historylimit"],
         capture_output=True,
         text=True,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 5
@@ -128,31 +186,31 @@ def get_recent_git_history(limit=5):
     """Get recent git commit history for context."""
     if limit <= 0:
         return ""
-    
+
     try:
         # Get recent commits with --oneline format
         result = subprocess.run(
             ["git", "log", "--oneline", f"-{limit}", "--no-merges"],
             capture_output=True,
             text=True,
-            encoding='utf-8',
+            encoding="utf-8",
         )
-        
+
         if result.returncode != 0:
             return ""
-        
+
         history = result.stdout.strip()
         if not history:
             return ""
-        
+
         # Format the history for better readability
         formatted_history = []
-        for line in history.split('\n'):
+        for line in history.split("\n"):
             if line.strip():
                 formatted_history.append(f"  {line}")
-        
+
         return f"Recent commit history:\n" + "\n".join(formatted_history)
-    
+
     except Exception:
         return ""
 
@@ -161,29 +219,35 @@ def get_affected_files_history(staged_files, limit=10):
     """Get commit history for files that are being modified."""
     if limit <= 0 or not staged_files:
         return ""
-    
+
     try:
         history_parts = []
-        
-        for file_path in staged_files[:5]:  # Limit to first 5 files to avoid too much output
+
+        for file_path in staged_files[
+            :5
+        ]:  # Limit to first 5 files to avoid too much output
             # Get recent commits that modified this file
             result = subprocess.run(
                 ["git", "log", "--oneline", f"-{limit}", "--", file_path],
                 capture_output=True,
                 text=True,
-                encoding='utf-8',
+                encoding="utf-8",
             )
-            
+
             if result.returncode == 0 and result.stdout.strip():
-                file_history = result.stdout.strip().split('\n')
-                if file_history and file_history[0]:  # Only add if there's actual history
+                file_history = result.stdout.strip().split("\n")
+                if (
+                    file_history and file_history[0]
+                ):  # Only add if there's actual history
                     history_parts.append(f"\nRecent changes to {file_path}:")
-                    for commit_line in file_history[:3]:  # Limit to 3 most recent commits per file
+                    for commit_line in file_history[
+                        :3
+                    ]:  # Limit to 3 most recent commits per file
                         if commit_line.strip():
                             history_parts.append(f"  {commit_line}")
-        
+
         return "\n".join(history_parts) if history_parts else ""
-    
+
     except Exception:
         return ""
 
@@ -195,11 +259,11 @@ def get_staged_files():
             ["git", "diff", "--cached", "--name-only"],
             capture_output=True,
             text=True,
-            encoding='utf-8',
+            encoding="utf-8",
         )
-        
+
         if result.returncode == 0:
-            return [f.strip() for f in result.stdout.split('\n') if f.strip()]
+            return [f.strip() for f in result.stdout.split("\n") if f.strip()]
         return []
     except Exception:
         return []
@@ -298,11 +362,13 @@ def setup_api_key():
     ).strip()
     if not history_limit:
         history_limit = str(existing_history_limit)
-    
+
     try:
         history_limit_int = int(history_limit)
         if 0 <= history_limit_int <= 20:
-            subprocess.run(["git", "config", "--global", "cam.historylimit", history_limit])
+            subprocess.run(
+                ["git", "config", "--global", "cam.historylimit", history_limit]
+            )
         else:
             print("History limit must be between 0-20, using default of 5")
             subprocess.run(["git", "config", "--global", "cam.historylimit", "5"])
@@ -317,8 +383,10 @@ def get_filtered_diff():
     """Get staged diff with filtered new/moved/deleted files."""
     # Get list of staged files and their statuses
     status = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True,
-        encoding='utf-8'
+        ["git", "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     ).stdout
 
     # Initialize lists for different file categories
@@ -364,8 +432,10 @@ def get_filtered_diff():
                 if file_size < 8192:  # 8KB = 8192 bytes
                     # Get the file content using git show
                     file_content = subprocess.run(
-                        ["git", "show", f":{file}"], capture_output=True, text=True,
-                        encoding='utf-8'
+                        ["git", "show", f":{file}"],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
                     ).stdout
 
                     if file_content:
@@ -391,8 +461,10 @@ def get_filtered_diff():
         diff_parts.append("Modified files (~):")
         for file in modified_files:
             file_diff = subprocess.run(
-                ["git", "diff", "--cached", file], capture_output=True, text=True,
-                encoding='utf-8'
+                ["git", "diff", "--cached", file],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
             ).stdout
             if file_diff:
                 diff_parts.append(f"~ {file}")
@@ -411,24 +483,24 @@ def get_filtered_diff():
 def get_contextual_history():
     """Get both general history and file-specific history for better context."""
     history_limit = get_git_config_history_limit()
-    
+
     if history_limit <= 0:
         return ""
-    
+
     # Get general recent history
     recent_history = get_recent_git_history(history_limit)
-    
+
     # Get staged files for file-specific history
     staged_files = get_staged_files()
     file_history = get_affected_files_history(staged_files, min(history_limit, 10))
-    
+
     # Combine histories
     context_parts = []
     if recent_history:
         context_parts.append(recent_history)
     if file_history:
         context_parts.append(file_history)
-    
+
     return "\n".join(context_parts) if context_parts else ""
 
 
@@ -441,7 +513,7 @@ def generate_commit_message(
     context_section = (
         f"\nUser provided context:\n{user_context}" if user_context else ""
     )
-    
+
     # Get git history context
     history_context = get_contextual_history()
     history_section = (

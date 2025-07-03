@@ -61,6 +61,16 @@ def create_parser():
 
     # Add optional arguments
     parser.add_argument(
+        "--skip-pre-commit",
+        action="store_true",
+        help="Skip running pre-commit hooks even if they're configured",
+    )
+    parser.add_argument(
+        "--pre-commit",
+        action="store_true",
+        help="Force running pre-commit hooks (don't ask)",
+    )
+    parser.add_argument(
         "--setup",
         action="store_true",
         help="Configure your Anthropic API key, model, and other preferences",
@@ -279,6 +289,27 @@ def main():
         if not diff:
             print(CLIFormatter.error("No changes staged for commit"))
             sys.exit(1)
+
+        # NEW: Check and run pre-commit hooks if available
+        if not args.all and not args.skip_pre_commit and check_precommit_installed():
+            should_run = args.pre_commit or should_run_precommit()
+            if should_run:
+                if not run_precommit_hooks():
+                    print(
+                        CLIFormatter.error(
+                            "Pre-commit hooks failed. Please fix issues and try again."
+                        )
+                    )
+                    sys.exit(1)
+
+                # Re-check staged diff after pre-commit hooks
+                updated_diff = get_filtered_diff()
+                if not updated_diff:
+                    print(
+                        CLIFormatter.error("No changes staged after pre-commit hooks")
+                    )
+                    sys.exit(1)
+                diff = updated_diff
 
         # Show diff in verbose mode
         if args.verbose:
