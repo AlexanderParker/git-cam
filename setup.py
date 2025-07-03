@@ -18,4 +18,9 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.11",
+    entry_points={
+        "console_scripts": [
+            "git-cam=git_cam.main:main",
+        ],
+    },
 )

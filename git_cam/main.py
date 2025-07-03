@@ -2,7 +2,7 @@
 import sys
 import argparse
 import subprocess
-from lib.utils import (
+from git_cam.utils import (
     get_git_config_key,
     setup_api_key,
     get_git_config_model,
@@ -19,8 +19,8 @@ from lib.utils import (
     show_history_limit,
     estimate_tokens,
 )
-from lib.recheck import analyze_repository
-from lib.classes import CLIFormatter
+from git_cam.recheck import analyze_repository
+from git_cam.classes import CLIFormatter
 
 
 def is_git_repo() -> bool:
