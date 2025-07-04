@@ -51,13 +51,9 @@ def should_run_precommit():
     if not check_precommit_installed():
         return False
 
-    try:
-        response = (
-            input("Pre-commit hooks detected. Run them first? (Y/n): ").strip().lower()
-        )
-        return response in ["", "y", "yes"]
-    except KeyboardInterrupt:
-        return False
+    print("Pre-commit hooks detected. Run them first? (Y/n): ", end="", flush=True)
+    response = input().strip().lower()
+    return response in ["", "y", "yes"]
 
 
 def get_git_config_key():
@@ -579,7 +575,7 @@ def generate_commit_message(
     skip_hooks=False,
     hook_bypass_reason="",
 ):
-    """Generate commit message using Claude with git history context and retry logic."""
+    """Generate commit message using Claude with git history context."""
     client = Anthropic(api_key=api_key)
 
     context_section = (
@@ -602,8 +598,7 @@ def generate_commit_message(
             " Consider if this context should be reflected in the commit message."
         )
 
-    message = call_anthropic_with_retry(
-        client=client,
+    message = client.messages.create(
         model=api_model,
         max_tokens=get_git_config_token_limit(),
         messages=[
@@ -634,13 +629,12 @@ Here's the diff:
 {diff}""",
             }
         ],
-        operation_name="Commit message generation",
     )
     return message.content[0].text.split("message:", 1)[1].strip()
 
 
 def perform_code_review(diff, api_key, api_model, config_instructions):
-    """Perform an AI code review on the changes with git history context and retry logic."""
+    """Perform an AI code review on the changes with git history context."""
     client = Anthropic(api_key=api_key)
 
     # Get git history context
@@ -649,8 +643,7 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
         f"\nGit History Context:\n{history_context}\n" if history_context else ""
     )
 
-    message = call_anthropic_with_retry(
-        client=client,
+    message = client.messages.create(
         model=api_model,
         max_tokens=get_git_config_token_limit(),
         messages=[
@@ -703,6 +696,5 @@ Here's the diff (remember, lines starting with + have been added, lines starting
 {diff}""",
             }
         ],
-        operation_name="Code review",
     )
     return message.content[0].text.split("review:", 1)[1].strip()
