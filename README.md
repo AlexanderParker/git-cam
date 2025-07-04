@@ -1,12 +1,13 @@
 # git-cam
 
-An AI-powered Git commit message generator that analyzes your changes and generates meaningful commit messages using Claude. It also performs a quick code review of your changes before committing, now with enhanced git history context.
+An AI-powered Git commit message generator that analyzes your changes and generates meaningful commit messages using Claude. It also performs a quick code review of your changes before committing, with enhanced git history context.
 
 ## Features
 
 - AI-powered commit message generation
 - Automatic code review before commit
-- **NEW: Git history context** - includes recent commits for better understanding
+- Git history context - includes recent commits for better understanding
+- Pre-commit hook integration with bypass options
 - Supports context from user input
 - Handles new, modified, moved, and deleted files
 
@@ -39,13 +40,13 @@ Enter number of recent commits to include for context (0-20) [5]:
 
 - If setup has already run, defaults will be shown in square brackets - just press enter to preserve the existing setting.
 - The default model initially is "claude-3-5-haiku-latest" - I find this provides a balance of cost and quality that suits me.
-- **NEW**: History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
+- History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
 
 ## Updating
 
 If installed with the --user switch:
 
-```pip install --user --force-reinstall git+https://github.com/AlexanderParker/git-cam.git```
+`pip install --user --force-reinstall git+https://github.com/AlexanderParker/git-cam.git`
 
 ## Installation Options
 
@@ -154,6 +155,9 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 - `--show-token-limit`: Show the current token limit
 - `--set-history-limit`: Set number of recent commits to include for context (0-20, default: 5)
 - `--show-history-limit`: Show the current history limit
+- `--pre-commit`: Force running pre-commit hooks (don't ask)
+- `--skip-pre-commit`: Skip running pre-commit hooks even if they're configured
+- `--force-commit`: Commit even if pre-commit hooks fail
 
 ### Behaviour Switches
 
@@ -162,9 +166,13 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 
 Note: The Token limit refers to the model's output; a higher number means longer replies from the model. Models like Claude's 3.5 Haiku support an input context window of 200k tokens which this project assumes is more than enough for regular use-cases.
 
+## Pre-commit Hook Integration
+
+Git-cam automatically detects and integrates with pre-commit hooks when they're configured in your repository. It runs hooks manually before the review stage to provide better feedback and avoid duplicate execution. If hooks fail, you can choose to proceed anyway and git-cam will capture your reason for bypassing them, which may be included in the commit message for transparency.
+
 ## Git History Context
 
-Git-cam now includes recent commit history to provide better context for code reviews and commit messages. This helps Claude understand:
+Git-cam includes recent commit history to provide better context for code reviews and commit messages. This helps Claude understand:
 
 - Recent development patterns
 - The evolution of files being modified
