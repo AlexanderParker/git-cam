@@ -505,7 +505,13 @@ def get_contextual_history():
 
 
 def generate_commit_message(
-    diff, review_content, user_context, config_instructions, api_key, api_model
+    diff,
+    review_content,
+    user_context,
+    config_instructions,
+    api_key,
+    api_model,
+    skip_hooks=False,
 ):
     """Generate commit message using Claude with git history context."""
     client = Anthropic(api_key=api_key)
@@ -519,6 +525,11 @@ def generate_commit_message(
     history_section = (
         f"\nGit History Context:\n{history_context}" if history_context else ""
     )
+
+    # Add hook skip context
+    hook_context = ""
+    if skip_hooks:
+        hook_context = "\nIMPORTANT: This commit will bypass git hooks (--no-verify) because pre-commit checks failed but the user chose to proceed anyway. Consider if this should be reflected in the commit message."
 
     message = client.messages.create(
         model=api_model,
@@ -537,7 +548,7 @@ Code Review:
 
 User context [Start]: {context_section} [end user context]
 
-{history_section}
+{history_section}{hook_context}
 
 Global system instructions [Start]: {config_instructions} [end system instructions]
 

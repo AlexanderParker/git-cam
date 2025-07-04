@@ -89,7 +89,7 @@ def create_parser():
         action="store_true",
         help="Configure your Anthropic API key, model, and other preferences",
     )
-    parser.add_argument("--version", action="version", version="git-cam version 0.2.1")
+    parser.add_argument("--version", action="version", version="git-cam version 0.2.2")
     parser.add_argument(
         "--add-instruction",
         type=str,
@@ -179,7 +179,7 @@ Configuration (initial setup):
     git cam --setup         | Configure API key, model, instructions, and history settings
 
 History Context:
-    Git-cam includes recent commit history to provide context for reviews and commit messages.
+    Git-cam now includes recent commit history to provide better context for reviews and commit messages.
     You can control how many recent commits to include (0-20) using --set-history-limit.
     Set to 0 to disable history context entirely.
 
@@ -312,6 +312,7 @@ def main():
             sys.exit(1)
 
         # Run pre-commit hooks if configured and not skipped
+        skip_git_hooks = False  # Track whether to skip hooks during actual commit
         if not args.all and not args.skip_pre_commit and check_precommit_installed():
             should_run = args.pre_commit or should_run_precommit()
             if should_run:
@@ -346,6 +347,7 @@ def main():
                                     "Proceeding with commit despite hook failures..."
                                 )
                             )
+                            skip_git_hooks = True  # Skip hooks during git commit
                     except KeyboardInterrupt:
                         print("\n" + CLIFormatter.warning("Commit cancelled"))
                         sys.exit(1)
@@ -356,6 +358,7 @@ def main():
                             "Pre-commit hooks failed, but proceeding due to --force-commit flag."
                         )
                     )
+                    skip_git_hooks = True  # Skip hooks during git commit
 
                 # Update staged diff after running pre-commit hooks
                 updated_diff = get_filtered_diff()
@@ -453,7 +456,13 @@ def main():
         while True:
             try:
                 message = generate_commit_message(
-                    diff, review, user_context, config_instructions, api_key, api_model
+                    diff,
+                    review,
+                    user_context,
+                    config_instructions,
+                    api_key,
+                    api_model,
+                    skip_git_hooks,
                 )
                 if (
                     not args.all
@@ -470,7 +479,11 @@ def main():
 
                     choice = input().lower()
                     if choice == "a" or choice == "":
-                        subprocess.run(["git", "commit", "-m", message])
+                        # Use --no-verify if we already handled failed hooks
+                        commit_cmd = ["git", "commit", "-m", message]
+                        if skip_git_hooks:
+                            commit_cmd.append("--no-verify")
+                        subprocess.run(commit_cmd)
                         print(CLIFormatter.success("Commit created successfully!"))
                         break
                     elif choice == "c":
@@ -482,7 +495,11 @@ def main():
                         )
                         continue
                 else:  # Auto-commit mode - commit immediately without prompting
-                    subprocess.run(["git", "commit", "-m", message])
+                    # Use --no-verify if we already handled failed hooks
+                    commit_cmd = ["git", "commit", "-m", message]
+                    if skip_git_hooks:
+                        commit_cmd.append("--no-verify")
+                    subprocess.run(commit_cmd)
                     print(CLIFormatter.success("Changes committed successfully!"))
                     print(CLIFormatter.message_header())
                     print(f"\n{message}\n")
