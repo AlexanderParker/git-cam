@@ -89,7 +89,7 @@ def create_parser():
         action="store_true",
         help="Configure your Anthropic API key, model, and other preferences",
     )
-    parser.add_argument("--version", action="version", version="git-cam version 0.1.0")
+    parser.add_argument("--version", action="version", version="git-cam version 0.2.1")
     parser.add_argument(
         "--add-instruction",
         type=str,
@@ -179,7 +179,7 @@ Configuration (initial setup):
     git cam --setup         | Configure API key, model, instructions, and history settings
 
 History Context:
-    Git-cam now includes recent commit history to provide better context for reviews and commit messages.
+    Git-cam includes recent commit history to provide context for reviews and commit messages.
     You can control how many recent commits to include (0-20) using --set-history-limit.
     Set to 0 to disable history context entirely.
 
