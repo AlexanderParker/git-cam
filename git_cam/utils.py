@@ -512,6 +512,7 @@ def generate_commit_message(
     api_key,
     api_model,
     skip_hooks=False,
+    hook_bypass_reason="",
 ):
     """Generate commit message using Claude with git history context."""
     client = Anthropic(api_key=api_key)
@@ -529,7 +530,12 @@ def generate_commit_message(
     # Add hook skip context
     hook_context = ""
     if skip_hooks:
-        hook_context = "\nIMPORTANT: This commit will bypass git hooks (--no-verify) because pre-commit checks failed but the user chose to proceed anyway. Consider if this should be reflected in the commit message."
+        hook_context = f"\nIMPORTANT: This commit will bypass git hooks (--no-verify) because pre-commit checks failed but the user chose to proceed anyway."
+        if hook_bypass_reason:
+            hook_context += f" Reason given: '{hook_bypass_reason}'"
+        hook_context += (
+            " Consider if this context should be reflected in the commit message."
+        )
 
     message = client.messages.create(
         model=api_model,
@@ -584,7 +590,18 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
                 "role": "user",
                 "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. Consider whether this change appears to be completing or correcting a recent commit.
 
-If no significant issues are found, respond with a brief confirmation. If issues are found, provide specific details about:
+Look especially carefully for:
+- Version number downgrades or inconsistencies 
+- Unintentional changes that contradict recent commits
+- Security concerns and exposed credentials
+- Critical bugs or performance issues
+- Major maintainability problems
+
+If you find any critical issues, end your response with exactly "STOP_COMMIT" (and ONLY use this phrase if you want to block the commit).
+If no significant issues are found, end your response with "OK".
+NEVER mention "STOP_COMMIT" in your response unless you are using it to actually stop the commit.
+
+If issues are found, provide specific details about:
 
 - What problem does this change solve?
 - Critical bugs or errors
@@ -595,9 +612,7 @@ If no significant issues are found, respond with a brief confirmation. If issues
 - Filename / code location of the found issues
 - How this change fits with recent development patterns
 
-If there is a critical issue, add the text "STOP_COMMIT" to your response.
-
-What counts as critical:
+What counts as critical (requiring STOP_COMMIT):
 - Security vulnerabilities
 - Exposed secrets or credentials
 - Dangerous configuration changes
@@ -605,12 +620,15 @@ What counts as critical:
 - Critical performance problems
 - Broken authentication
 - Command injection risks
+- Version downgrades or inconsistencies
+- Changes that contradict recent intentional commits
 
 {history_section}Global system instructions [Start]: {config_instructions} [end system instructions]
 
 Return your response in this format:
 review:
-[Your concise review here - one line if no issues, detailed explanation only if problems found, optional question for user clarification if required]
+[Your concise review here - one line if no issues, detailed explanation only if problems found]
+[End with either "OK" or "STOP_COMMIT" - never mention STOP_COMMIT unless using it to block]
 
 Here's the diff (remember, lines starting with + have been added, lines starting with - are removed):
 

@@ -89,7 +89,7 @@ def create_parser():
         action="store_true",
         help="Configure your Anthropic API key, model, and other preferences",
     )
-    parser.add_argument("--version", action="version", version="git-cam version 0.2.2")
+    parser.add_argument("--version", action="version", version="git-cam version 0.2.3")
     parser.add_argument(
         "--add-instruction",
         type=str,
@@ -200,12 +200,11 @@ def has_critical_issues(review: str) -> bool:
         review: The review text from the AI code review
 
     Returns:
-        bool: True if critical issues are found (STOP_COMMIT marker present)
+        bool: True if critical issues are found (review ends with STOP_COMMIT)
     """
-    if review.find("STOP_COMMIT") > -1:
-        return True
-
-    return False
+    # Only consider it a critical issue if the review ENDS with STOP_COMMIT
+    # This prevents false positives when STOP_COMMIT is mentioned in context
+    return review.strip().endswith("STOP_COMMIT")
 
 
 def main():
@@ -313,6 +312,7 @@ def main():
 
         # Run pre-commit hooks if configured and not skipped
         skip_git_hooks = False  # Track whether to skip hooks during actual commit
+        hook_bypass_reason = ""  # Track reason for bypassing hooks
         if not args.all and not args.skip_pre_commit and check_precommit_installed():
             should_run = args.pre_commit or should_run_precommit()
             if should_run:
@@ -347,6 +347,14 @@ def main():
                                     "Proceeding with commit despite hook failures..."
                                 )
                             )
+                            # Ask for reason when bypassing hooks
+                            print(
+                                CLIFormatter.input_prompt(
+                                    "Please provide a reason for bypassing pre-commit hooks (optional): "
+                                ),
+                                end="",
+                            )
+                            hook_bypass_reason = input().strip()
                             skip_git_hooks = True  # Skip hooks during git commit
                     except KeyboardInterrupt:
                         print("\n" + CLIFormatter.warning("Commit cancelled"))
@@ -358,6 +366,7 @@ def main():
                             "Pre-commit hooks failed, but proceeding due to --force-commit flag."
                         )
                     )
+                    hook_bypass_reason = "Used --force-commit flag"
                     skip_git_hooks = True  # Skip hooks during git commit
 
                 # Update staged diff after running pre-commit hooks
@@ -400,7 +409,12 @@ def main():
                         )
                     )
                     print("\n")
-                    print(CLIFormatter.error(review.replace("STOP_COMMIT", "").strip()))
+                    # Display review with red STOP_COMMIT text
+                    formatted_review = review.replace("STOP_COMMIT", "").strip()
+                    formatted_review = formatted_review.replace(
+                        "STOP_COMMIT", CLIFormatter.error("STOP_COMMIT")
+                    )
+                    print(CLIFormatter.error(formatted_review))
                     print("\n")
                     print(
                         CLIFormatter.warning(
@@ -426,10 +440,17 @@ def main():
                 print(CLIFormatter.header("Code Review"))
                 print(CLIFormatter.review_header())
 
+                # Format review with red STOP_COMMIT highlighting if present
+                formatted_review = review
+                if "STOP_COMMIT" in review:
+                    formatted_review = review.replace(
+                        "STOP_COMMIT", CLIFormatter.error("STOP_COMMIT")
+                    )
+
                 if has_issues:
-                    print(CLIFormatter.warning(review))
+                    print(CLIFormatter.warning(formatted_review))
                 else:
-                    print(CLIFormatter.success(review))
+                    print(CLIFormatter.success(formatted_review))
 
                 print(CLIFormatter.separator())
                 print(
@@ -463,6 +484,7 @@ def main():
                     api_key,
                     api_model,
                     skip_git_hooks,
+                    hook_bypass_reason,
                 )
                 if (
                     not args.all
