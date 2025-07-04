@@ -20,7 +20,7 @@ from git_cam.utils import (
     estimate_tokens,
     check_precommit_installed,
     run_precommit_hooks,
-    should_run_precommit,   
+    should_run_precommit,
 )
 from git_cam.recheck import analyze_repository
 from git_cam.classes import CLIFormatter
@@ -43,6 +43,12 @@ def is_git_repo() -> bool:
 
 
 def create_parser():
+    """
+    Create and configure the argument parser for git-cam.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with all commands and options
+    """
     parser = argparse.ArgumentParser(
         description="AI-powered Git commit message generator using Claude",
         add_help=False,  # Disable default help since we're handling it ourselves
@@ -72,6 +78,11 @@ def create_parser():
         "--pre-commit",
         action="store_true",
         help="Force running pre-commit hooks (don't ask)",
+    )
+    parser.add_argument(
+        "--force-commit",
+        action="store_true",
+        help="Commit even if pre-commit hooks fail",
     )
     parser.add_argument(
         "--setup",
@@ -131,9 +142,10 @@ def create_parser():
 
 
 def show_help():
+    """Display comprehensive help information for git-cam usage."""
     print(
         """
-git cam by Alex Parker - see GitHub for details: https://github.com/alexparker/git-cam
+git cam by Alex Parker - see GitHub for details: https://github.com/AlexanderParker/git-cam
 
 Usage: git cam [command] [options]
 
@@ -151,6 +163,9 @@ Options:
     --show-token-limit      | Show the current token limit
     --set-history-limit     | Set number of recent commits to include for context (0-20, default: 5)
     --show-history-limit    | Show the current history limit
+    --pre-commit            | Force running pre-commit hooks (don't ask)
+    --skip-pre-commit       | Skip running pre-commit hooks even if they're configured
+    --force-commit          | Commit even if pre-commit hooks fail
 
 Behaviour Switches
     -a, --all               | Stage all modified files and commit (skips verification)
@@ -173,14 +188,19 @@ History Context:
 
 
 def stage_all_files():
-    """Stage all modified files."""
+    """Stage all modified files using 'git add -A'."""
     subprocess.run(["git", "add", "-A"])
 
 
 def has_critical_issues(review: str) -> bool:
     """
-    Check if the review contains a STOP_COMMIT string.
-    Returns (has_critical_issues, formatted_message)
+    Check if the code review contains critical issues that should block commits.
+
+    Args:
+        review: The review text from the AI code review
+
+    Returns:
+        bool: True if critical issues are found (STOP_COMMIT marker present)
     """
     if review.find("STOP_COMMIT") > -1:
         return True
@@ -193,9 +213,8 @@ def main():
         parser = create_parser()
         args = parser.parse_args(sys.argv[1:])
 
-        # Add git repo check right after argument parsing
+        # Skip git repository validation for help and version commands
         if len(sys.argv) > 1 and sys.argv[1] in ["--help", "--version", "help"]:
-            # Skip git repo check for help and version
             pass
         else:
             if not is_git_repo():
@@ -256,7 +275,7 @@ def main():
             show_history_limit()
             return
 
-        # Get the API key
+        # Get API configuration
         api_key = get_git_config_key()
         if not api_key:
             print(
@@ -266,7 +285,6 @@ def main():
             )
             sys.exit(1)
 
-        # Get the API model
         api_model = get_git_config_model()
         if not api_model:
             print(
@@ -274,38 +292,72 @@ def main():
             )
             sys.exit(1)
 
-        # Get the API model
         config_instructions = get_git_config_instructions()
 
+        # Handle recheck command
         if args.command == "recheck":
             query = getattr(args, "query", None)
             analyze_repository(api_key, api_model, config_instructions, query)
             return
 
-        # Stage all files if -a flag is used
+        # Stage all files if --all flag is used
         if args.all:
             print(CLIFormatter.input_prompt("Staging all modified files..."))
             stage_all_files()
 
-        # Get the staged diff
+        # Get staged changes for review and commit message generation
         diff = get_filtered_diff()
         if not diff:
             print(CLIFormatter.error("No changes staged for commit"))
             sys.exit(1)
 
-        # NEW: Check and run pre-commit hooks if available
+        # Run pre-commit hooks if configured and not skipped
         if not args.all and not args.skip_pre_commit and check_precommit_installed():
             should_run = args.pre_commit or should_run_precommit()
             if should_run:
-                if not run_precommit_hooks():
+                hooks_passed = run_precommit_hooks()
+                if not hooks_passed and not args.force_commit:
                     print(
                         CLIFormatter.error(
                             "Pre-commit hooks failed. Please fix issues and try again."
                         )
                     )
-                    sys.exit(1)
+                    print(
+                        CLIFormatter.warning(
+                            "Alternatively, use --force-commit to commit despite hook failures."
+                        )
+                    )
 
-                # Re-check staged diff after pre-commit hooks
+                    # Prompt user for choice to proceed despite failures
+                    print(
+                        CLIFormatter.input_prompt(
+                            "Do you want to commit anyway? (y/N): "
+                        ),
+                        end="",
+                    )
+                    try:
+                        force_choice = input().strip().lower()
+                        if force_choice not in ["y", "yes"]:
+                            print(CLIFormatter.warning("Commit cancelled"))
+                            sys.exit(1)
+                        else:
+                            print(
+                                CLIFormatter.warning(
+                                    "Proceeding with commit despite hook failures..."
+                                )
+                            )
+                    except KeyboardInterrupt:
+                        print("\n" + CLIFormatter.warning("Commit cancelled"))
+                        sys.exit(1)
+
+                elif not hooks_passed and args.force_commit:
+                    print(
+                        CLIFormatter.warning(
+                            "Pre-commit hooks failed, but proceeding due to --force-commit flag."
+                        )
+                    )
+
+                # Update staged diff after running pre-commit hooks
                 updated_diff = get_filtered_diff()
                 if not updated_diff:
                     print(
@@ -314,7 +366,7 @@ def main():
                     sys.exit(1)
                 diff = updated_diff
 
-        # Show diff in verbose mode
+        # Display diff preview in verbose mode
         if args.verbose:
             print(CLIFormatter.header("Diff Preview"))
             print(CLIFormatter.diff_header())
@@ -329,11 +381,12 @@ def main():
             )
             input()
 
-        # First, perform the code review
+        # Perform AI code review of changes
         print("\nReviewing changes...", end="", flush=True)
         try:
             review = perform_code_review(diff, api_key, api_model, config_instructions)
 
+            # Handle auto-commit mode (--all flag)
             if args.all:
                 has_critical = has_critical_issues(review)
 
@@ -360,6 +413,7 @@ def main():
                 else:
                     user_context = ""  # No user context in auto mode
             else:
+                # Handle interactive mode - show review and get user input
                 has_issues = (
                     len(review.strip().split("\n")) > 1
                     or "issue" in review.lower()
@@ -395,13 +449,15 @@ def main():
             print(CLIFormatter.error(f"\nError during code review: {str(e)}"))
             sys.exit(1)
 
-        # Generate and handle commit message
+        # Generate commit message and handle user interaction
         while True:
             try:
                 message = generate_commit_message(
                     diff, review, user_context, config_instructions, api_key, api_model
                 )
-                if not args.all:  # Show message preview in normal mode
+                if (
+                    not args.all
+                ):  # Interactive mode - show message preview and get user choice
                     print(CLIFormatter.header("Generated Commit Message"))
                     print(CLIFormatter.message_header())
                     print(f"\n{message}\n")
@@ -425,7 +481,7 @@ def main():
                             CLIFormatter.input_prompt("Regenerating commit message...")
                         )
                         continue
-                else:  # Auto mode - commit immediately
+                else:  # Auto-commit mode - commit immediately without prompting
                     subprocess.run(["git", "commit", "-m", message])
                     print(CLIFormatter.success("Changes committed successfully!"))
                     print(CLIFormatter.message_header())
