@@ -1,9 +1,9 @@
 import os
 from typing import List, Dict, Tuple
 from anthropic import Anthropic
-from lib.classes import CLIFormatter
+from git_cam.classes import CLIFormatter
 import subprocess
-from lib.utils import get_git_config_token_limit
+from git_cam.utils import get_git_config_token_limit
 from pathlib import Path
 import pathspec  # New import for handling gitignore patterns
 
