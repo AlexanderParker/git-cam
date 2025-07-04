@@ -504,6 +504,71 @@ def get_contextual_history():
     return "\n".join(context_parts) if context_parts else ""
 
 
+import time
+from anthropic import Anthropic
+from git_cam.classes import CLIFormatter
+
+
+def call_anthropic_with_retry(
+    client, model, max_tokens, messages, operation_name="API call"
+):
+    """
+    Call Anthropic API with retry logic for temporary failures.
+
+    Args:
+        client: Anthropic client instance
+        model: Model name to use
+        max_tokens: Maximum tokens for response
+        messages: Messages to send to API
+        operation_name: Description of operation for user feedback
+
+    Returns:
+        API response message
+
+    Raises:
+        Exception: If all retries are exhausted
+    """
+    retry_delays = [5, 10, 60]  # seconds to wait between retries
+
+    for attempt in range(len(retry_delays) + 1):  # +1 for initial attempt
+        try:
+            return client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=messages,
+            )
+        except Exception as e:
+            error_str = str(e)
+
+            # Check if this is a retryable error
+            is_retryable = (
+                "529" in error_str  # Overloaded
+                or "overloaded" in error_str.lower()
+                or "rate_limit" in error_str.lower()
+                or "timeout" in error_str.lower()
+                or "502" in error_str  # Bad Gateway
+                or "503" in error_str  # Service Unavailable
+                or "504" in error_str  # Gateway Timeout
+            )
+
+            if not is_retryable or attempt >= len(retry_delays):
+                # Either not retryable or we've exhausted all retries
+                raise e
+
+            # Wait and retry
+            delay = retry_delays[attempt]
+            print(
+                CLIFormatter.warning(
+                    f"{operation_name} failed (attempt {attempt + 1}): {error_str}"
+                )
+            )
+            print(CLIFormatter.input_prompt(f"Retrying in {delay} seconds..."))
+            time.sleep(delay)
+
+    # This shouldn't be reached, but just in case
+    raise Exception("Maximum retries exceeded")
+
+
 def generate_commit_message(
     diff,
     review_content,
@@ -514,7 +579,7 @@ def generate_commit_message(
     skip_hooks=False,
     hook_bypass_reason="",
 ):
-    """Generate commit message using Claude with git history context."""
+    """Generate commit message using Claude with git history context and retry logic."""
     client = Anthropic(api_key=api_key)
 
     context_section = (
@@ -537,7 +602,8 @@ def generate_commit_message(
             " Consider if this context should be reflected in the commit message."
         )
 
-    message = client.messages.create(
+    message = call_anthropic_with_retry(
+        client=client,
         model=api_model,
         max_tokens=get_git_config_token_limit(),
         messages=[
@@ -568,12 +634,13 @@ Here's the diff:
 {diff}""",
             }
         ],
+        operation_name="Commit message generation",
     )
     return message.content[0].text.split("message:", 1)[1].strip()
 
 
 def perform_code_review(diff, api_key, api_model, config_instructions):
-    """Perform an AI code review on the changes with git history context."""
+    """Perform an AI code review on the changes with git history context and retry logic."""
     client = Anthropic(api_key=api_key)
 
     # Get git history context
@@ -582,7 +649,8 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
         f"\nGit History Context:\n{history_context}\n" if history_context else ""
     )
 
-    message = client.messages.create(
+    message = call_anthropic_with_retry(
+        client=client,
         model=api_model,
         max_tokens=get_git_config_token_limit(),
         messages=[
@@ -635,5 +703,6 @@ Here's the diff (remember, lines starting with + have been added, lines starting
 {diff}""",
             }
         ],
+        operation_name="Code review",
     )
     return message.content[0].text.split("review:", 1)[1].strip()
