@@ -528,6 +528,8 @@ def generate_commit_message(
                 "role": "user",
                 "content": f"""Analyse this git diff and code review to generate a commit message. Use insights from the review, git history context, and any user-provided context to make the commit message more descriptive of the changes' purpose and impact.
 
+Pay attention to the git history context - if this appears to be a follow-up, correction, or completion of a recent commit (e.g., fixing a missed file in a version update, correcting a typo, or completing an incomplete change), reflect this relationship in the commit message.
+
 Be as concise as possible and avoid exaggerating minor changes to be more impactful than they are. The git history helps you understand the development patterns and context of this repository.
 
 Code Review:
@@ -569,7 +571,9 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
         messages=[
             {
                 "role": "user",
-                "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. If no significant issues are found, respond with a brief confirmation. If issues are found, provide specific details about:
+                "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. Consider whether this change appears to be completing or correcting a recent commit.
+
+If no significant issues are found, respond with a brief confirmation. If issues are found, provide specific details about:
 
 - What problem does this change solve?
 - Critical bugs or errors
