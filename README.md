@@ -9,22 +9,13 @@ An AI-powered Git commit message generator that analyzes your changes and genera
 - Git history context - includes recent commits for better understanding
 - Pre-commit hook integration with bypass options
 - Supports context from user input
-- Handles new, modified, moved, and deleted files
 
 ## Installation
 
 1. Install via pip:
 
-Option 1: Install directly from GitHub
-
 ```
 $ pip install git+https://github.com/AlexanderParker/git-cam
-```
-
-Option 2: Git clone and install locally
-
-```
-$ pip install [path to local folder where you cloned the repo]
 ```
 
 2. Set up your Anthropic API key, preferred model, and optional instructions:
@@ -42,23 +33,13 @@ Enter number of recent commits to include for context (0-20) [5]:
 - The default model initially is "claude-3-5-haiku-latest" - I find this provides a balance of cost and quality that suits me.
 - History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
 
-## Installation Options
-
-### System-wide Installation
-
-To install git-cam:
-
-```bash
-pip install git+https://github.com/AlexanderParker/git-cam
-```
-
-### Updating
+## Updating
 
 To update git-cam:
 
 `pip install --force-reinstall git+https://github.com/AlexanderParker/git-cam.git`
 
-### Verifying Installation
+## Verifying Installation
 
 After installation and PATH setup, verify the command is available:
 
@@ -66,7 +47,7 @@ After installation and PATH setup, verify the command is available:
 git cam --version
 ```
 
-### First-time Setup
+## First-time Setup
 
 Once installed, configure your API key and preferences:
 
@@ -84,12 +65,12 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 4. You can type in additional context if requested, or if necessary (i.e. adding a Jira ticket number)
 5. Claude will generate a commit message, which you can choose to accept, regenerate, or cancel.
 
-### Commands
+## Commands
 
 - `help`: Show help message
 - `recheck`: Check your entire repository for improvement suggestions (experimental feature).
 
-### Options
+## Options
 
 - `--setup`: Configure cam's settings
 - `--version`: Show version information
@@ -104,7 +85,7 @@ Instead of `git commit`, use `git cam` to commit your staged changes:
 - `--skip-pre-commit`: Skip running pre-commit hooks even if they're configured
 - `--force-commit`: Commit even if pre-commit hooks fail
 
-### Behaviour Switches
+## Behaviour Switches
 
 - `-a`, `--all`: Stage all modified files and commit (skips verification)
 - `-v`, `--verbose`: Shows verbose output, including the diff being sent to Claude

@@ -1,25 +1,125 @@
 import subprocess, os
+from pathlib import Path
 from anthropic import Anthropic
 
 
-def check_precommit_installed():
-    """Check if pre-commit is installed and configured."""
-    try:
-        # Check if pre-commit command exists
-        result = subprocess.run(
-            ["pre-commit", "--version"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",  # Handle encoding errors gracefully
-        )
-        if result.returncode != 0:
-            return False
+def check_git_hooks():
+    """
+    Check for both native git hooks and pre-commit framework hooks.
 
-        # Check if .pre-commit-config.yaml exists
-        return os.path.exists(".pre-commit-config.yaml")
+    Returns:
+        dict: {
+            'has_native_hooks': bool,
+            'has_precommit': bool,
+            'native_hooks': list,
+            'precommit_available': bool
+        }
+    """
+    result = {"has_native_hooks": False, "has_precommit": False, "native_hooks": [], "precommit_available": False}
+
+    # Check for native git hooks in .git/hooks/
+    try:
+        hooks_dir = Path(".git/hooks")
+        if hooks_dir.exists():
+            # Common hook names (without .sample suffix)
+            hook_names = [
+                "pre-commit",
+                "prepare-commit-msg",
+                "commit-msg",
+                "post-commit",
+                "pre-rebase",
+                "post-checkout",
+                "post-merge",
+                "pre-push",
+                "pre-receive",
+                "update",
+                "post-receive",
+                "post-update",
+            ]
+
+            for hook_name in hook_names:
+                hook_path = hooks_dir / hook_name
+                if hook_path.exists() and hook_path.is_file():
+                    # Check if it's executable (on Unix-like systems)
+                    if os.name != "nt" and not os.access(hook_path, os.X_OK):
+                        continue  # Skip non-executable hooks
+                    result["native_hooks"].append(hook_name)
+
+            result["has_native_hooks"] = len(result["native_hooks"]) > 0
+    except Exception:
+        pass  # Ignore errors accessing .git/hooks
+
+    # Check for pre-commit framework
+    result["has_precommit"] = os.path.exists(".pre-commit-config.yaml")
+
+    # Check if pre-commit command is available
+    try:
+        subprocess.run(["pre-commit", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result["precommit_available"] = True
     except FileNotFoundError:
-        return False
+        result["precommit_available"] = False
+
+    return result
+
+
+def should_run_hooks():
+    """
+    Ask user about running hooks, handling both native git hooks and pre-commit.
+
+    Returns:
+        dict: {
+            'run_precommit': bool,
+            'bypass_native': bool,
+            'reason': str
+        }
+    """
+    hook_info = check_git_hooks()
+
+    # If no hooks at all, return early
+    if not hook_info["has_native_hooks"] and not hook_info["has_precommit"]:
+        return {"run_precommit": False, "bypass_native": False, "reason": "No hooks configured"}
+
+    # Handle pre-commit framework
+    if hook_info["has_precommit"]:
+        if not hook_info["precommit_available"]:
+            print("⚠ Pre-commit config found but pre-commit command not available")
+            print("Install pre-commit: pip install pre-commit")
+            return {"run_precommit": False, "bypass_native": True, "reason": "Pre-commit not installed"}
+
+        print("Pre-commit hooks detected. Run them first? (Y/n): ", end="", flush=True)
+        response = input().strip().lower()
+
+        if response in ["", "y", "yes"]:
+            return {"run_precommit": True, "bypass_native": True, "reason": "Running pre-commit hooks"}
+        else:
+            return {"run_precommit": False, "bypass_native": True, "reason": "User skipped pre-commit hooks"}
+
+    # Handle native git hooks
+    if hook_info["has_native_hooks"]:
+        hooks_list = ", ".join(hook_info["native_hooks"])
+        print(f"Native git hooks detected: {hooks_list}")
+        print("These will run automatically during commit. Continue? (Y/n): ", end="", flush=True)
+        response = input().strip().lower()
+
+        if response in ["", "y", "yes"]:
+            return {"run_precommit": False, "bypass_native": False, "reason": "Using native git hooks"}
+        else:
+            return {"run_precommit": False, "bypass_native": True, "reason": "User chose to bypass native hooks"}
+
+    return {"run_precommit": False, "bypass_native": False, "reason": "No action needed"}
+
+
+# Keep these existing functions but update them to work with the new system
+def check_precommit_installed():
+    """Legacy function - now uses the new hook detection system."""
+    hook_info = check_git_hooks()
+    return hook_info["has_precommit"] and hook_info["precommit_available"]
+
+
+def should_run_precommit():
+    """Legacy function - now uses the new hook detection system."""
+    hook_decision = should_run_hooks()
+    return hook_decision["run_precommit"]
 
 
 def run_precommit_hooks():
@@ -30,7 +130,7 @@ def run_precommit_hooks():
             ["pre-commit", "run", "--files"] + get_staged_files(),
             text=True,
             encoding="utf-8",
-            errors="replace",  # Handle encoding errors gracefully
+            errors="replace",
         )
 
         if result.returncode == 0:
@@ -46,16 +146,6 @@ def run_precommit_hooks():
         return False
 
 
-def should_run_precommit():
-    """Ask user if they want to run pre-commit hooks."""
-    if not check_precommit_installed():
-        return False
-
-    print("Pre-commit hooks detected. Run them first? (Y/n): ", end="", flush=True)
-    response = input().strip().lower()
-    return response in ["", "y", "yes"]
-
-
 def get_git_config_key():
     """Get Anthropic API key from git config."""
     result = subprocess.run(
@@ -63,7 +153,7 @@ def get_git_config_key():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     )
     return result.stdout.strip()
 
@@ -75,7 +165,7 @@ def get_git_config_model():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     )
     return result.stdout.strip()
 
@@ -87,7 +177,7 @@ def get_git_config_instructions():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     )
     return result.stdout.strip()
 
@@ -99,7 +189,7 @@ def get_git_config_token_limit():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 1024
@@ -115,7 +205,7 @@ def get_git_config_history_limit():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 5
@@ -193,7 +283,7 @@ def get_recent_git_history(limit=5):
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="replace",  # Handle encoding errors gracefully
+            errors="replace",
         )
 
         if result.returncode != 0:
@@ -230,7 +320,7 @@ def get_affected_files_history(staged_files, limit=10):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                errors="replace",  # Handle encoding errors gracefully
+                errors="replace",
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -255,7 +345,7 @@ def get_staged_files():
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="replace",  # Handle encoding errors gracefully
+            errors="replace",
         )
 
         if result.returncode == 0:
@@ -377,7 +467,7 @@ def get_filtered_diff():
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",  # Handle encoding errors gracefully
+        errors="replace",
     ).stdout
 
     # Initialize lists for different file categories
@@ -427,7 +517,7 @@ def get_filtered_diff():
                         capture_output=True,
                         text=True,
                         encoding="utf-8",
-                        errors="replace",  # Handle encoding errors gracefully
+                        errors="replace",
                     ).stdout
 
                     if file_content:
@@ -457,7 +547,7 @@ def get_filtered_diff():
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                errors="replace",  # Handle encoding errors gracefully
+                errors="replace",
             ).stdout
             if file_diff:
                 diff_parts.append(f"~ {file}")
@@ -583,10 +673,11 @@ def generate_commit_message(
             hook_context += f" Reason given: '{hook_bypass_reason}'"
         hook_context += " Consider if this context should be reflected in the commit message."
 
-    message = client.messages.create(
-        model=api_model,
-        max_tokens=get_git_config_token_limit(),
-        messages=[
+    message = call_anthropic_with_retry(
+        client,
+        api_model,
+        get_git_config_token_limit(),
+        [
             {
                 "role": "user",
                 "content": f"""Analyse this git diff and code review to generate a commit message. Use insights from the review, git history context, and any user-provided context to make the commit message more descriptive of the changes' purpose and impact.
@@ -614,6 +705,7 @@ Here's the diff:
 {diff}""",
             }
         ],
+        "Commit message generation",
     )
     return message.content[0].text.split("message:", 1)[1].strip()
 
@@ -626,10 +718,11 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
     history_context = get_contextual_history()
     history_section = f"\nGit History Context:\n{history_context}\n" if history_context else ""
 
-    message = client.messages.create(
-        model=api_model,
-        max_tokens=get_git_config_token_limit(),
-        messages=[
+    message = call_anthropic_with_retry(
+        client,
+        api_model,
+        get_git_config_token_limit(),
+        [
             {
                 "role": "user",
                 "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. Consider whether this change appears to be completing or correcting a recent commit.
@@ -650,8 +743,14 @@ Look especially carefully for:
 - Critical bugs or performance issues
 - Major maintainability problems
 
-If you find any critical issues, end your response with exactly "STOP_COMMIT" (and ONLY use this phrase if you want to block the commit).
-If no significant issues are found, end your response with "OK".
+IMPORTANT: Review ONLY the changes in this specific commit. Do NOT suggest unrelated features or improvements.
+
+PRIORITY RULE: If ANY critical issue is found, end with "STOP_COMMIT" regardless of other positive changes.
+If you find critical issues with the actual changes being committed, end with "STOP_COMMIT".
+If you find specific problems with the code in this diff that should be fixed, end with "NOTICE".
+If the changes in this diff are good to commit as-is, end with "OK".
+
+Do NOT suggest unrelated features, logging, telemetry, or improvements not directly related to the code being changed.
 NEVER mention "STOP_COMMIT" in your response unless you are using it to actually stop the commit.
 
 If issues are found, provide specific details about:
@@ -677,18 +776,25 @@ What counts as critical (requiring STOP_COMMIT):
 - Version downgrades or inconsistencies
 - Changes that contradict recent intentional commits
 - Adding files that should never be committed (like __pycache__, .DS_Store, IDE files, etc.)
+- Accidental debug code, test code, or random lines left in production files
+- Broken syntax or code that won't run
+- Hardcoded sensitive values or development-only code
 
 {history_section}Global system instructions [Start]: {config_instructions} [end system instructions]
 
 Return your response in this format:
 review:
-[Your concise review here - one line if no issues, detailed explanation only if problems found]
-[End with either "OK" or "STOP_COMMIT" - never mention STOP_COMMIT unless using it to block]
+[Review the actual changes in this diff - do not suggest unrelated features]
+[End with "STOP_COMMIT" if ANY critical issues found, "NOTICE" if minor issues found, or "OK" if all changes are good]
+
+Critical issues always take precedence - even one accidental debug line should result in STOP_COMMIT regardless of other good changes.
+Only comment on what is actually being changed in this commit. Do not suggest features, logging, telemetry, or other improvements not present in the diff.
 
 Here's the diff (remember, lines starting with + have been added, lines starting with - are removed):
 
 {diff}""",
             }
         ],
+        "Code review",
     )
     return message.content[0].text.split("review:", 1)[1].strip()
