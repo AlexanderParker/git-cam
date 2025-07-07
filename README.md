@@ -42,76 +42,21 @@ Enter number of recent commits to include for context (0-20) [5]:
 - The default model initially is "claude-3-5-haiku-latest" - I find this provides a balance of cost and quality that suits me.
 - History limit controls how many recent commits are included for context (default: 5, set to 0 to disable)
 
-## Updating
-
-If installed with the --user switch:
-
-`pip install --user --force-reinstall git+https://github.com/AlexanderParker/git-cam.git`
-
 ## Installation Options
 
 ### System-wide Installation
 
-To install git-cam for all users (requires admin/root privileges):
+To install git-cam:
 
 ```bash
 pip install git+https://github.com/AlexanderParker/git-cam
 ```
 
-### User Installation
+### Updating
 
-To install git-cam for your user only:
+To update git-cam:
 
-```bash
-pip install --user git+https://github.com/AlexanderParker/git-cam
-```
-
-When using `--user`, the script is installed to your user's script directory. You'll need to ensure this directory is in your PATH:
-
-#### Windows
-
-The user scripts directory is typically:
-
-```
-%APPDATA%\Roaming\Python\PythonVVV\Scripts [VVV is your Python version number, i.e. 311]
-```
-
-To add to PATH:
-
-1. Press Win + R
-2. Type `systempropertiesadvanced` and press Enter
-3. Click "Environment Variables"
-4. Under "User variables", edit "Path"
-5. Add the Scripts path above
-6. Click OK and restart your terminal
-
-#### macOS/Linux
-
-The user scripts directory is typically:
-
-```bash
-# macOS
-~/Library/Python/x.x/bin [x.x is your Python version number, i.e. 3.11]
-
-# Linux
-~/.local/bin
-```
-
-Add to PATH by adding this to your `~/.bashrc`, `~/.zshrc`, or equivalent:
-
-```bash
-# macOS
-export PATH="$HOME/Library/Python/3.x/bin:$PATH"
-
-# Linux
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Then reload your shell:
-
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
+`pip install --force-reinstall git+https://github.com/AlexanderParker/git-cam.git`
 
 ### Verifying Installation
 
@@ -272,12 +217,6 @@ $ git config --global cam.instructions "your custom instructions (can be blank)"
 $ git config --global cam.tokenlimit 1024
 $ git config --global cam.historylimit 5
 ```
-
-## Requirements
-
-- Python 3.6+
-- Git
-- Anthropic API key
 
 ## License
 

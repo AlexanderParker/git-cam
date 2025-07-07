@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "git-cam"
+version = "0.2.4"
+authors = [{ name = "Alex Parker", email = "alexofparker@gmail.com" }]
+description = "An AI-powered Git commit code review and message generator using Claude"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Environment :: Console",
+]
+keywords = ["git", "commit", "ai", "claude", "code-review", "automation"]
+dependencies = ["anthropic>=0.39.0", "colorama>=0.4.6", "pathspec>=0.11.2"]
+
+[project.urls]
+Homepage = "https://github.com/AlexanderParker/git-cam"
+Repository = "https://github.com/AlexanderParker/git-cam"
+Issues = "https://github.com/AlexanderParker/git-cam/issues"
+
+[project.scripts]
+git-cam = "git_cam.main:main"
+
+[tool.setuptools]
+packages = ["git_cam"]
+
+[tool.setuptools.package-dir]
+git_cam = "git_cam"

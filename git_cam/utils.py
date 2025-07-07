@@ -11,6 +11,7 @@ def check_precommit_installed():
             capture_output=True,
             text=True,
             encoding="utf-8",
+            errors="replace",  # Handle encoding errors gracefully
         )
         if result.returncode != 0:
             return False
@@ -29,6 +30,7 @@ def run_precommit_hooks():
             ["pre-commit", "run", "--files"] + get_staged_files(),
             text=True,
             encoding="utf-8",
+            errors="replace",  # Handle encoding errors gracefully
         )
 
         if result.returncode == 0:
@@ -36,9 +38,7 @@ def run_precommit_hooks():
             return True
         else:
             print("✗ Pre-commit hooks failed")
-            print(
-                "Please fix the issues and re-stage your files before running git cam again."
-            )
+            print("Please fix the issues and re-stage your files before running git cam again.")
             return False
 
     except Exception as e:
@@ -63,6 +63,7 @@ def get_git_config_key():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     )
     return result.stdout.strip()
 
@@ -74,6 +75,7 @@ def get_git_config_model():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     )
     return result.stdout.strip()
 
@@ -85,6 +87,7 @@ def get_git_config_instructions():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     )
     return result.stdout.strip()
 
@@ -96,13 +99,12 @@ def get_git_config_token_limit():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 1024
     except ValueError:
-        print(
-            "Error reading value, defaulting to 1024. Update using 'git config --global --set cam.tokenlimit=1234'"
-        )
+        print("Error reading value, defaulting to 1024. Update using 'git config --global --set cam.tokenlimit=1234'")
         return 1024
 
 
@@ -113,6 +115,7 @@ def get_git_config_history_limit():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     )
     try:
         return int(result.stdout.strip()) if result.stdout.strip() else 5
@@ -190,6 +193,7 @@ def get_recent_git_history(limit=5):
             capture_output=True,
             text=True,
             encoding="utf-8",
+            errors="replace",  # Handle encoding errors gracefully
         )
 
         if result.returncode != 0:
@@ -219,26 +223,21 @@ def get_affected_files_history(staged_files, limit=10):
     try:
         history_parts = []
 
-        for file_path in staged_files[
-            :5
-        ]:  # Limit to first 5 files to avoid too much output
+        for file_path in staged_files[:5]:  # Limit to first 5 files to avoid too much output
             # Get recent commits that modified this file
             result = subprocess.run(
                 ["git", "log", "--oneline", f"-{limit}", "--", file_path],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
+                errors="replace",  # Handle encoding errors gracefully
             )
 
             if result.returncode == 0 and result.stdout.strip():
                 file_history = result.stdout.strip().split("\n")
-                if (
-                    file_history and file_history[0]
-                ):  # Only add if there's actual history
+                if file_history and file_history[0]:  # Only add if there's actual history
                     history_parts.append(f"\nRecent changes to {file_path}:")
-                    for commit_line in file_history[
-                        :3
-                    ]:  # Limit to 3 most recent commits per file
+                    for commit_line in file_history[:3]:  # Limit to 3 most recent commits per file
                         if commit_line.strip():
                             history_parts.append(f"  {commit_line}")
 
@@ -256,6 +255,7 @@ def get_staged_files():
             capture_output=True,
             text=True,
             encoding="utf-8",
+            errors="replace",  # Handle encoding errors gracefully
         )
 
         if result.returncode == 0:
@@ -343,9 +343,7 @@ def setup_api_key():
 
     # Prompt for instructions with existing value as default
     instructions_prompt = f" [{existing_instructions}]" if existing_instructions else ""
-    instructions = input(
-        f"Enter additional instructions for Claude{instructions_prompt}: "
-    ).strip()
+    instructions = input(f"Enter additional instructions for Claude{instructions_prompt}: ").strip()
     if not instructions and existing_instructions:
         instructions = existing_instructions
     if instructions:
@@ -353,18 +351,14 @@ def setup_api_key():
 
     # Prompt for history limit with existing value as default
     history_prompt = f" [{existing_history_limit}]"
-    history_limit = input(
-        f"Enter number of recent commits to include for context (0-20){history_prompt}: "
-    ).strip()
+    history_limit = input(f"Enter number of recent commits to include for context (0-20){history_prompt}: ").strip()
     if not history_limit:
         history_limit = str(existing_history_limit)
 
     try:
         history_limit_int = int(history_limit)
         if 0 <= history_limit_int <= 20:
-            subprocess.run(
-                ["git", "config", "--global", "cam.historylimit", history_limit]
-            )
+            subprocess.run(["git", "config", "--global", "cam.historylimit", history_limit])
         else:
             print("History limit must be between 0-20, using default of 5")
             subprocess.run(["git", "config", "--global", "cam.historylimit", "5"])
@@ -383,6 +377,7 @@ def get_filtered_diff():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # Handle encoding errors gracefully
     ).stdout
 
     # Initialize lists for different file categories
@@ -422,7 +417,7 @@ def get_filtered_diff():
         for file in new_files:
             diff_parts.append(f"+ {file}")
 
-            # Check if file exists and is under 1KB
+            # Check if file exists and is under 8KB
             try:
                 file_size = os.path.getsize(file)
                 if file_size < 8192:  # 8KB = 8192 bytes
@@ -432,6 +427,7 @@ def get_filtered_diff():
                         capture_output=True,
                         text=True,
                         encoding="utf-8",
+                        errors="replace",  # Handle encoding errors gracefully
                     ).stdout
 
                     if file_content:
@@ -450,7 +446,7 @@ def get_filtered_diff():
     if moved_files:
         diff_parts.append("Files moved:")
         for old, new in moved_files:
-            diff_parts.append(f"↻ {old} -> {new}")
+            diff_parts.append(f"→ {old} -> {new}")
         diff_parts.append("")
 
     if modified_files:
@@ -461,6 +457,7 @@ def get_filtered_diff():
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
+                errors="replace",  # Handle encoding errors gracefully
             ).stdout
             if file_diff:
                 diff_parts.append(f"~ {file}")
@@ -505,9 +502,7 @@ from anthropic import Anthropic
 from git_cam.classes import CLIFormatter
 
 
-def call_anthropic_with_retry(
-    client, model, max_tokens, messages, operation_name="API call"
-):
+def call_anthropic_with_retry(client, model, max_tokens, messages, operation_name="API call"):
     """
     Call Anthropic API with retry logic for temporary failures.
 
@@ -553,11 +548,7 @@ def call_anthropic_with_retry(
 
             # Wait and retry
             delay = retry_delays[attempt]
-            print(
-                CLIFormatter.warning(
-                    f"{operation_name} failed (attempt {attempt + 1}): {error_str}"
-                )
-            )
+            print(CLIFormatter.warning(f"{operation_name} failed (attempt {attempt + 1}): {error_str}"))
             print(CLIFormatter.input_prompt(f"Retrying in {delay} seconds..."))
             time.sleep(delay)
 
@@ -578,15 +569,11 @@ def generate_commit_message(
     """Generate commit message using Claude with git history context."""
     client = Anthropic(api_key=api_key)
 
-    context_section = (
-        f"\nUser provided context:\n{user_context}" if user_context else ""
-    )
+    context_section = f"\nUser provided context:\n{user_context}" if user_context else ""
 
     # Get git history context
     history_context = get_contextual_history()
-    history_section = (
-        f"\nGit History Context:\n{history_context}" if history_context else ""
-    )
+    history_section = f"\nGit History Context:\n{history_context}" if history_context else ""
 
     # Add hook skip context
     hook_context = ""
@@ -594,9 +581,7 @@ def generate_commit_message(
         hook_context = f"\nIMPORTANT: This commit will bypass git hooks (--no-verify) because pre-commit checks failed but the user chose to proceed anyway."
         if hook_bypass_reason:
             hook_context += f" Reason given: '{hook_bypass_reason}'"
-        hook_context += (
-            " Consider if this context should be reflected in the commit message."
-        )
+        hook_context += " Consider if this context should be reflected in the commit message."
 
     message = client.messages.create(
         model=api_model,
@@ -639,9 +624,7 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
 
     # Get git history context
     history_context = get_contextual_history()
-    history_section = (
-        f"\nGit History Context:\n{history_context}\n" if history_context else ""
-    )
+    history_section = f"\nGit History Context:\n{history_context}\n" if history_context else ""
 
     message = client.messages.create(
         model=api_model,
@@ -652,6 +635,15 @@ def perform_code_review(diff, api_key, api_model, config_instructions):
                 "content": f"""Review this git diff for potential issues. The git history context helps you understand recent development patterns and the evolution of these files. Consider whether this change appears to be completing or correcting a recent commit.
 
 Look especially carefully for:
+- Files that should NEVER be committed to version control:
+  * __pycache__/ folders and .pyc/.pyo files (Python bytecode)
+  * .DS_Store files (macOS)
+  * Thumbs.db files (Windows)
+  * IDE files (.vscode/, .idea/, *.code-workspace)
+  * Environment files (.env, .venv/)
+  * Log files (*.log)
+  * Temporary files (*.tmp, *.temp, *.swp, *.swo)
+  * Build artifacts (dist/, build/, *.egg-info/)
 - Version number downgrades or inconsistencies 
 - Unintentional changes that contradict recent commits
 - Security concerns and exposed credentials
@@ -670,6 +662,7 @@ If issues are found, provide specific details about:
 - Significant performance issues
 - Major maintainability problems
 - Unintentional debug printing to console
+- Files that should not be in version control
 - Filename / code location of the found issues
 - How this change fits with recent development patterns
 
@@ -683,6 +676,7 @@ What counts as critical (requiring STOP_COMMIT):
 - Command injection risks
 - Version downgrades or inconsistencies
 - Changes that contradict recent intentional commits
+- Adding files that should never be committed (like __pycache__, .DS_Store, IDE files, etc.)
 
 {history_section}Global system instructions [Start]: {config_instructions} [end system instructions]
 
