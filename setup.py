@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="git-cam",
-    version="0.2.3",
+    version="0.2.4",
     packages=find_packages(),
     scripts=["git-cam"],
     install_requires=["anthropic>=0.39.0", "colorama>=0.4.6", "pathspec>=0.11.2"],

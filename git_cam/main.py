@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import os
 import argparse
 import subprocess
 from git_cam.utils import (
@@ -61,12 +62,8 @@ def create_parser():
     subparsers.add_parser("help", help="Show help information")
 
     # Add 'recheck' as a command with question option
-    recheck_parser = subparsers.add_parser(
-        "recheck", help="Analyse repository for improvements"
-    )
-    recheck_parser.add_argument(
-        "-q", "--query", type=str, help="Specific question or focus for the analysis"
-    )
+    recheck_parser = subparsers.add_parser("recheck", help="Analyse repository for improvements")
+    recheck_parser.add_argument("-q", "--query", type=str, help="Specific question or focus for the analysis")
 
     # Add optional arguments
     parser.add_argument(
@@ -102,18 +99,14 @@ def create_parser():
         metavar="INSTRUCTIONS",
         help="Set new instructions, replacing existing ones",
     )
-    parser.add_argument(
-        "--show-instructions", action="store_true", help="Display current instructions"
-    )
+    parser.add_argument("--show-instructions", action="store_true", help="Display current instructions")
     parser.add_argument(
         "--set-token-limit",
         type=str,
         metavar="LIMIT",
         help="Set maximum token limit for diff output (default: 1024)",
     )
-    parser.add_argument(
-        "--show-token-limit", action="store_true", help="Show the current token limit."
-    )
+    parser.add_argument("--show-token-limit", action="store_true", help="Show the current token limit.")
     parser.add_argument(
         "--set-history-limit",
         type=str,
@@ -207,6 +200,59 @@ def has_critical_issues(review: str) -> bool:
     return review.strip().endswith("STOP_COMMIT")
 
 
+def handle_critical_issues_in_auto_mode(review: str) -> tuple[bool, str]:
+    """
+    Handle critical issues found during auto-commit mode.
+
+    Args:
+        review: The review text containing critical issues
+
+    Returns:
+        tuple: (should_continue, user_context)
+               should_continue: True if user wants to proceed despite issues
+               user_context: Additional context provided by user
+    """
+    print(CLIFormatter.error("\nCritical issues found in auto-commit mode that require attention:"))
+    print("\n")
+    # Remove STOP_COMMIT marker and display the review
+    clean_review = review.replace("STOP_COMMIT", "").strip()
+    print(CLIFormatter.error(clean_review))
+    print("\n")
+
+    print(CLIFormatter.warning("Auto-commit mode detected potential safety concerns."))
+    print(
+        CLIFormatter.input_prompt("Do you want to proceed with the commit anyway? (y/N): "),
+        end="",
+    )
+
+    try:
+        proceed_choice = input().strip().lower()
+        if proceed_choice not in ["y", "yes"]:
+            print(CLIFormatter.warning("Auto-commit cancelled for safety."))
+            print(
+                CLIFormatter.warning(
+                    "To bypass these checks in future, use regular 'git cam' without -a flag to review and confirm changes."
+                )
+            )
+            return False, ""
+
+        # User wants to proceed - get context
+        print(
+            CLIFormatter.input_prompt(
+                "Please provide context for why you're proceeding despite these issues (optional): "
+            ),
+            end="",
+        )
+        user_context = input().strip()
+
+        print(CLIFormatter.warning("Proceeding with auto-commit despite critical issues..."))
+        return True, user_context
+
+    except KeyboardInterrupt:
+        print("\n" + CLIFormatter.warning("Auto-commit cancelled"))
+        return False, ""
+
+
 def main():
     try:
         parser = create_parser()
@@ -217,21 +263,9 @@ def main():
             pass
         else:
             if not is_git_repo():
-                print(
-                    CLIFormatter.error(
-                        "Could not access a git repository here (or any parent up to mount point /)"
-                    )
-                )
-                print(
-                    CLIFormatter.error(
-                        "Check your folder and permissions (running 'git status' may yield clues)"
-                    )
-                )
-                print(
-                    CLIFormatter.error(
-                        "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)"
-                    )
-                )
+                print(CLIFormatter.error("Could not access a git repository here (or any parent up to mount point /)"))
+                print(CLIFormatter.error("Check your folder and permissions (running 'git status' may yield clues)"))
+                print(CLIFormatter.error("Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)"))
                 sys.exit(1)
 
         parser = create_parser()
@@ -277,18 +311,12 @@ def main():
         # Get API configuration
         api_key = get_git_config_key()
         if not api_key:
-            print(
-                CLIFormatter.error(
-                    "API key not found. Run 'git cam --setup' first ('git cam help' for more info)"
-                )
-            )
+            print(CLIFormatter.error("API key not found. Run 'git cam --setup' first ('git cam help' for more info)"))
             sys.exit(1)
 
         api_model = get_git_config_model()
         if not api_model:
-            print(
-                CLIFormatter.error("API model not found. Run 'git cam --setup' first")
-            )
+            print(CLIFormatter.error("API model not found. Run 'git cam --setup' first"))
             sys.exit(1)
 
         config_instructions = get_git_config_instructions()
@@ -314,104 +342,102 @@ def main():
         skip_git_hooks = False  # Only set to True if we actually need to bypass hooks
         hook_bypass_reason = ""  # Track reason for bypassing hooks
 
-        if not args.skip_pre_commit and check_precommit_installed():
-            # Pre-commit hooks exist - we need to handle them
-            skip_git_hooks = True  # We'll always bypass git's hooks since we're running them manually
+        # Check if pre-commit config exists (even if pre-commit command isn't available)
+        has_precommit_config = os.path.exists(".pre-commit-config.yaml")
+        precommit_installed = check_precommit_installed()
 
-            # Determine if we should run hooks
-            should_run = False
-            if args.pre_commit:
-                should_run = True
-            elif args.all:
-                should_run = True
+        if not args.skip_pre_commit and has_precommit_config:
+            # Pre-commit hooks are configured - we need to handle them
+            skip_git_hooks = True  # Always bypass git's hooks since we're taking control
+
+            if not precommit_installed:
+                # Config exists but pre-commit not available
+                hook_bypass_reason = "Pre-commit configured but command not available"
             else:
-                # Interactive mode - ask user (this can raise KeyboardInterrupt)
-                try:
-                    should_run = should_run_precommit()
-                except KeyboardInterrupt:
-                    print("\n" + CLIFormatter.warning("Operation cancelled by user"))
-                    import os
-
-                    os._exit(0)
-
-            if should_run:
-                hooks_passed = run_precommit_hooks()
-                if not hooks_passed:
-                    if args.force_commit:
-                        # Force commit flag used
-                        print(
-                            CLIFormatter.warning(
-                                "Pre-commit hooks failed, but proceeding due to --force-commit flag."
-                            )
-                        )
-                        hook_bypass_reason = "Used --force-commit flag"
-                    elif args.all:
-                        # Auto-commit mode - automatically proceed
-                        print(
-                            CLIFormatter.warning(
-                                "Pre-commit hooks failed in auto-commit mode. Proceeding anyway..."
-                            )
-                        )
-                        hook_bypass_reason = "Auto-commit mode with hook failures"
-                    else:
-                        # Interactive mode - ask user
-                        print(
-                            CLIFormatter.error(
-                                "Pre-commit hooks failed. Please fix issues and try again."
-                            )
-                        )
-                        print(
-                            CLIFormatter.warning(
-                                "Alternatively, use --force-commit to commit despite hook failures."
-                            )
-                        )
-
-                        # Prompt user for choice to proceed despite failures
-                        print(
-                            CLIFormatter.input_prompt(
-                                "Do you want to commit anyway? (y/N): "
-                            ),
-                            end="",
-                        )
-                        try:
-                            force_choice = input().strip().lower()
-                            if force_choice not in ["y", "yes"]:
-                                print(CLIFormatter.warning("Commit cancelled"))
-                                sys.exit(1)
-                            else:
-                                print(
-                                    CLIFormatter.warning(
-                                        "Proceeding with commit despite hook failures..."
-                                    )
-                                )
-                                # Ask for reason when bypassing hooks
-                                print(
-                                    CLIFormatter.input_prompt(
-                                        "Please provide a reason for bypassing pre-commit hooks (optional): "
-                                    ),
-                                    end="",
-                                )
-                                hook_bypass_reason = input().strip()
-                        except KeyboardInterrupt:
-                            print("\n" + CLIFormatter.warning("Commit cancelled"))
-                            import os
-
-                            os._exit(1)
+                # Pre-commit is available - determine if we should run hooks manually
+                should_run = False
+                if args.pre_commit:
+                    should_run = True
+                    hook_bypass_reason = "Manual pre-commit check (--pre-commit flag)"
+                elif args.all:
+                    should_run = True
+                    hook_bypass_reason = "Auto-commit mode"
                 else:
-                    # Hooks passed, but we still want to skip git's hooks since we already ran them
-                    if args.all:
-                        hook_bypass_reason = "Auto-commit mode (hooks already checked)"
-                    else:
-                        hook_bypass_reason = "Manual pre-commit check completed"
+                    # Interactive mode - ask user (this can raise KeyboardInterrupt)
+                    try:
+                        should_run = should_run_precommit()
+                        if should_run:
+                            hook_bypass_reason = "Manual pre-commit check completed"
+                        else:
+                            hook_bypass_reason = "User chose to skip pre-commit hooks"
+                    except KeyboardInterrupt:
+                        print("\n" + CLIFormatter.warning("Operation cancelled by user"))
+                        os._exit(0)
 
-                # Update staged diff after running pre-commit hooks
-                updated_diff = get_filtered_diff()
-                if not updated_diff:
-                    print(
-                        CLIFormatter.error("No changes staged after pre-commit hooks")
-                    )
-                    sys.exit(1)
-                diff = updated_diff
+                if should_run:
+                    hooks_passed = run_precommit_hooks()
+                    if not hooks_passed:
+                        if args.force_commit:
+                            # Force commit flag used
+                            print(
+                                CLIFormatter.warning(
+                                    "Pre-commit hooks failed, but proceeding due to --force-commit flag."
+                                )
+                            )
+                            hook_bypass_reason = "Used --force-commit flag"
+                        elif args.all:
+                            # Auto-commit mode - automatically proceed
+                            print(
+                                CLIFormatter.warning(
+                                    "Pre-commit hooks failed in auto-commit mode. Proceeding anyway..."
+                                )
+                            )
+                            hook_bypass_reason = "Auto-commit mode with hook failures"
+                        else:
+                            # Interactive mode - ask user
+                            print(CLIFormatter.error("Pre-commit hooks failed. Please fix issues and try again."))
+                            print(
+                                CLIFormatter.warning(
+                                    "Alternatively, use --force-commit to commit despite hook failures."
+                                )
+                            )
+
+                            # Prompt user for choice to proceed despite failures
+                            print(
+                                CLIFormatter.input_prompt("Do you want to commit anyway? (y/N): "),
+                                end="",
+                            )
+                            try:
+                                force_choice = input().strip().lower()
+                                if force_choice not in ["y", "yes"]:
+                                    print(CLIFormatter.warning("Commit cancelled"))
+                                    sys.exit(1)
+                                else:
+                                    print(CLIFormatter.warning("Proceeding with commit despite hook failures..."))
+                                    # Ask for reason when bypassing hooks
+                                    print(
+                                        CLIFormatter.input_prompt(
+                                            "Please provide a reason for bypassing pre-commit hooks (optional): "
+                                        ),
+                                        end="",
+                                    )
+                                    hook_bypass_reason = input().strip()
+                            except KeyboardInterrupt:
+                                print("\n" + CLIFormatter.warning("Commit cancelled"))
+                                os._exit(1)
+                    else:
+                        # Hooks passed - we already checked them
+                        if args.all:
+                            hook_bypass_reason = "Auto-commit mode (hooks passed)"
+                        else:
+                            hook_bypass_reason = "Manual pre-commit check passed"
+
+                    # Update staged diff after running pre-commit hooks
+                    updated_diff = get_filtered_diff()
+                    if not updated_diff:
+                        print(CLIFormatter.error("No changes staged after pre-commit hooks"))
+                        sys.exit(1)
+                    diff = updated_diff
 
         # Display diff preview in verbose mode
         if args.verbose:
@@ -421,11 +447,7 @@ def main():
             print(CLIFormatter.separator())
             token_count = estimate_tokens(diff)
             print(f"\nEstimated tokens: {token_count} (NOTE: Just a rough guess!)")
-            print(
-                CLIFormatter.input_prompt(
-                    "Press Enter to continue or Ctrl+C to cancel..."
-                )
-            )
+            print(CLIFormatter.input_prompt("Press Enter to continue or Ctrl+C to cancel..."))
             input()
 
         # Perform AI code review of changes
@@ -438,35 +460,17 @@ def main():
                 has_critical = has_critical_issues(review)
 
                 if has_critical:
-                    print(
-                        CLIFormatter.error(
-                            "\nCritical issues found that require attention:"
-                        )
-                    )
-                    print("\n")
-                    # Remove STOP_COMMIT marker and display the review
-                    clean_review = review.replace("STOP_COMMIT", "").strip()
-                    print(CLIFormatter.error(clean_review))
-                    print("\n")
-                    print(
-                        CLIFormatter.warning(
-                            "Auto-commit cancelled for safety. Please review these issues carefully."
-                        )
-                    )
-                    print(
-                        CLIFormatter.warning(
-                            "To bypass this check, use regular 'git cam' without -a flag to review and confirm if these changes are intended."
-                        )
-                    )
-                    sys.exit(1)
+                    # NEW: Handle critical issues in auto-commit mode with user interaction
+                    should_continue, user_context = handle_critical_issues_in_auto_mode(review)
+                    if not should_continue:
+                        sys.exit(1)
+                    # If we reach here, user wants to continue with the provided context
                 else:
-                    user_context = ""  # No user context in auto mode
+                    user_context = ""  # No user context in auto mode when no critical issues
             else:
                 # Handle interactive mode - show review and get user input
                 has_issues = (
-                    len(review.strip().split("\n")) > 1
-                    or "issue" in review.lower()
-                    or "concern" in review.lower()
+                    len(review.strip().split("\n")) > 1 or "issue" in review.lower() or "concern" in review.lower()
                 )
 
                 print(CLIFormatter.header("Code Review"))
@@ -475,9 +479,7 @@ def main():
                 # Format review with red STOP_COMMIT highlighting if present
                 formatted_review = review
                 if "STOP_COMMIT" in review:
-                    formatted_review = review.replace(
-                        "STOP_COMMIT", CLIFormatter.error("STOP_COMMIT")
-                    )
+                    formatted_review = review.replace("STOP_COMMIT", CLIFormatter.error("STOP_COMMIT"))
 
                 if has_issues:
                     print(CLIFormatter.warning(formatted_review))
@@ -497,9 +499,7 @@ def main():
                     print(CLIFormatter.warning("Commit cancelled"))
                     sys.exit(0)
 
-                user_context = (
-                    user_input if user_input and user_input.lower() != "y" else ""
-                )
+                user_context = user_input if user_input and user_input.lower() != "y" else ""
 
         except Exception as e:
             print(CLIFormatter.error(f"\nError during code review: {str(e)}"))
@@ -518,18 +518,12 @@ def main():
                     skip_git_hooks,
                     hook_bypass_reason,
                 )
-                if (
-                    not args.all
-                ):  # Interactive mode - show message preview and get user choice
+                if not args.all:  # Interactive mode - show message preview and get user choice
                     print(CLIFormatter.header("Generated Commit Message"))
                     print(CLIFormatter.message_header())
                     print(f"\n{message}\n")
                     print(CLIFormatter.separator())
-                    print(
-                        CLIFormatter.input_prompt(
-                            "(A)ccept, (c)ancel, or (r)egenerate? (ENTER accepts by default)"
-                        )
-                    )
+                    print(CLIFormatter.input_prompt("(A)ccept, (c)ancel, or (r)egenerate? (ENTER accepts by default)"))
 
                     choice = input().lower()
                     if choice == "a" or choice == "":
@@ -538,26 +532,18 @@ def main():
                         if skip_git_hooks:
                             commit_cmd.append("--no-verify")
 
-                        result = subprocess.run(
-                            commit_cmd, capture_output=True, text=True
-                        )
+                        result = subprocess.run(commit_cmd, capture_output=True, text=True)
                         if result.returncode == 0:
                             print(CLIFormatter.success("Commit created successfully!"))
                             break
                         else:
-                            print(
-                                CLIFormatter.error(
-                                    f"Git commit failed: {result.stderr.strip()}"
-                                )
-                            )
+                            print(CLIFormatter.error(f"Git commit failed: {result.stderr.strip()}"))
                             sys.exit(1)
                     elif choice == "c":
                         print(CLIFormatter.warning("Commit cancelled"))
                         break
                     elif choice == "r":
-                        print(
-                            CLIFormatter.input_prompt("Regenerating commit message...")
-                        )
+                        print(CLIFormatter.input_prompt("Regenerating commit message..."))
                         continue
                 else:  # Auto-commit mode - commit immediately without prompting
                     # Use --no-verify if we already handled failed hooks
@@ -572,11 +558,7 @@ def main():
                         print(f"\n{message}\n")
                         break
                     else:
-                        print(
-                            CLIFormatter.error(
-                                f"Git commit failed: {result.stderr.strip()}"
-                            )
-                        )
+                        print(CLIFormatter.error(f"Git commit failed: {result.stderr.strip()}"))
                         sys.exit(1)
             except Exception as e:
                 print(CLIFormatter.error(f"Error: {str(e)}"))
@@ -584,8 +566,6 @@ def main():
 
     except KeyboardInterrupt:
         print("\n" + CLIFormatter.warning("Operation cancelled by user"))
-        import os
-
         os._exit(0)
 
 
