@@ -253,6 +253,38 @@ def handle_critical_issues_in_auto_mode(review: str) -> tuple[bool, str]:
         return False, ""
 
 
+def run_precommit_with_auto_restage(is_auto_mode: bool = False) -> bool:
+    """
+    Run pre-commit hooks, and in auto mode, automatically restage and retry if they fail.
+    
+    Args:
+        is_auto_mode: Whether we're in auto-commit mode (-a flag)
+        
+    Returns:
+        bool: True if hooks passed (eventually), False if they failed
+    """
+    hooks_passed = run_precommit_hooks()
+    
+    if not hooks_passed and is_auto_mode:
+        print(CLIFormatter.warning("Pre-commit hooks failed. Auto-fixing and re-staging changes..."))
+        
+        # Re-stage all files to capture any auto-fixes
+        stage_all_files()
+        
+        # Run hooks again to see if auto-fixes resolved the issues
+        print(CLIFormatter.input_prompt("Running pre-commit hooks again after auto-fixes..."))
+        hooks_passed_second = run_precommit_hooks()
+        
+        if hooks_passed_second:
+            print(CLIFormatter.success("Pre-commit hooks passed after auto-fixes!"))
+            return True
+        else:
+            print(CLIFormatter.warning("Pre-commit hooks still failing after auto-fixes."))
+            return False
+    
+    return hooks_passed
+
+
 def main():
     try:
         parser = create_parser()
@@ -385,7 +417,9 @@ def main():
 
             # Run pre-commit if requested
             if hook_decision["run_precommit"]:
-                hooks_passed = run_precommit_hooks()
+                # Use the new function that handles auto-restaging in auto mode
+                hooks_passed = run_precommit_with_auto_restage(is_auto_mode=args.all)
+                
                 if not hooks_passed:
                     if args.force_commit:
                         # Force commit flag used
@@ -434,7 +468,7 @@ def main():
                     else:
                         hook_bypass_reason = "Manual pre-commit check passed"
 
-                # Update staged diff after running pre-commit hooks
+                # Update staged diff after running pre-commit hooks (important for auto-fixes)
                 updated_diff = get_filtered_diff()
                 if not updated_diff:
                     print(CLIFormatter.error("No changes staged after pre-commit hooks"))
